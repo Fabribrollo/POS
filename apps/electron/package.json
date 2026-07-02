@@ -1,0 +1,44 @@
+{
+  "name": "@pos/electron",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/main.cjs",
+  "scripts": {
+    "dev": "node esbuild.config.mjs && electron .",
+    "typecheck": "tsc --noEmit",
+    "build": "node esbuild.config.mjs",
+    "package": "pnpm build && electron-builder",
+    "package:dir": "pnpm build && electron-builder --dir -c.mac.target=dir"
+  },
+  "devDependencies": {
+    "@pos/backend": "workspace:*",
+    "@prisma/client": "^6.10.1",
+    "@types/node": "^22.10.5",
+    "electron": "^33.2.1",
+    "electron-builder": "^25.1.8",
+    "esbuild": "^0.24.0",
+    "typescript": "^5.7.3"
+  },
+  "build": {
+    "appId": "com.posindumentaria.pos",
+    "productName": "POS Indumentaria",
+    "directories": {
+      "output": "release"
+    },
+    "files": ["dist/**/*", "package.json"],
+    "asarUnpack": ["dist/*.node"],
+    "extraResources": [
+      { "from": "../../prisma/migrations", "to": "migrations" },
+      { "from": "../frontend/dist", "to": "frontend" }
+    ],
+    "win": {
+      "target": "nsis"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true
+    }
+  }
+}

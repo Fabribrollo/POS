@@ -1,0 +1,30 @@
+{
+  "name": "pos-indumentaria",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "pnpm@11.9.0",
+  "scripts": {
+    "dev:backend": "pnpm --filter @pos/backend dev",
+    "dev:frontend": "pnpm --filter @pos/frontend dev",
+    "dev:electron": "pnpm --filter @pos/electron dev",
+    "build": "pnpm -r build",
+    "package:win": "pnpm build && pnpm --filter @pos/electron package",
+    "package:dir": "pnpm build && pnpm --filter @pos/electron package:dir",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:seed": "tsx prisma/seed.ts",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm --filter @pos/backend test"
+  },
+  "devDependencies": {
+    "prisma": "^6.10.1",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  },
+  "dependencies": {
+    "@prisma/client": "6.19.3"
+  }
+}
