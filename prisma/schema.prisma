@@ -1,0 +1,464 @@
+// ============================================================================
+// POS Indumentaria - Schema Prisma
+// Motor actual: SQLite (embebido, offline). Migración a PostgreSQL: ver notas
+// al final del archivo.
+//
+// Notas de diseño:
+// - SQLite no soporta "enum" nativo en Prisma -> los campos de tipo "estado"
+//   se modelan como String y se validan en la capa de aplicación (zod +
+//   constantes compartidas en /shared). Al migrar a Postgres se pueden
+//   convertir a enum nativo sin romper la app si se valida igual en código.
+// - Los montos usan Decimal (no Float) para evitar errores de redondeo con
+//   dinero. Prisma serializa Decimal como string en SQLite.
+// - "activo" en catálogos = baja lógica (soft delete). Nunca se borra
+//   físicamente un producto/cliente/proveedor que ya tenga movimientos.
+// - depositoId en Stock/MovimientoStock deja preparada la app para múltiples
+//   sucursales/depósitos sin migración estructural futura.
+// ============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+  // Salida fija dentro del propio proyecto (no en node_modules/.prisma,
+  // que en Prisma 6.x vive anidado en el store de pnpm con un path que
+  // incluye el hash de versión). electron-builder no tiene forma de saber
+  // que ese folder "invisible" debe empaquetarse porque no es una
+  // dependencia declarada en ningún package.json. Generarlo acá lo vuelve
+  // un archivo más del proyecto, bundleable por esbuild como cualquier
+  // otro import relativo.
+  // Fuera de src/ a propósito: tsc compila src/**/*.ts a dist/**/*.js
+  // preservando estructura, pero NO copia los .js ya generados de Prisma
+  // (no son .ts). Poniéndolo como hermano de src/ y dist/, el mismo import
+  // relativo ("../../generated/prisma/...") resuelve igual sea el código
+  // fuente (para tsx en dev) o el compilado (dist/, para el bundle final).
+  output = "../apps/backend/generated/prisma"
+  // El sistema final se distribuye para Windows, pero se desarrolla en esta
+  // máquina Mac: sin esto, `prisma generate` solo produciría el motor nativo
+  // de la plataforma donde corre (darwin-arm64), y el instalador de Windows
+  // quedaría sin el binario que realmente necesita en tiempo de ejecución.
+  binaryTargets = ["native", "windows"]
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ==================== SEGURIDAD / USUARIOS ====================
+
+model Rol {
+  id          Int       @id @default(autoincrement())
+  nombre      String    @unique // ADMINISTRADOR | ENCARGADO | VENDEDOR
+  descripcion String?
+  usuarios    Usuario[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model Usuario {
+  id           Int       @id @default(autoincrement())
+  nombre       String
+  email        String    @unique
+  passwordHash String
+  rolId        Int
+  rol          Rol       @relation(fields: [rolId], references: [id])
+  activo       Boolean   @default(true)
+  ultimoLogin  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  ventas           Venta[]
+  movimientosStock MovimientoStock[]
+  movimientosCaja  MovimientoCaja[]
+  cajasAbiertas    Caja[]            @relation("CajaApertura")
+  cajasCerradas    Caja[]            @relation("CajaCierre")
+  devoluciones     Devolucion[]
+
+  @@index([rolId])
+}
+
+// ==================== CATÁLOGO ====================
+
+model Categoria {
+  id        Int        @id @default(autoincrement())
+  nombre    String     @unique
+  activo    Boolean    @default(true)
+  productos Producto[]
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+}
+
+model Marca {
+  id        Int        @id @default(autoincrement())
+  nombre    String     @unique
+  activo    Boolean    @default(true)
+  productos Producto[]
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+}
+
+model Producto {
+  id            Int        @id @default(autoincrement())
+  nombre        String
+  descripcion   String?
+  codigoInterno String     @unique
+  codigoBarras  String?    @unique
+  sku           String?    @unique
+  categoriaId   Int?
+  categoria     Categoria? @relation(fields: [categoriaId], references: [id])
+  marcaId       Int?
+  marca         Marca?     @relation(fields: [marcaId], references: [id])
+  precioCosto   Decimal    @default(0)
+  precioVenta   Decimal    @default(0)
+  stockMinimo   Int        @default(0)
+  activo        Boolean    @default(true) // baja lógica
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  variantes        Variante[]
+  stock            Stock[]
+  movimientosStock MovimientoStock[]
+  itemsVenta       ItemVenta[]
+  itemsCompra      ItemCompra[]
+  preciosPorLista  PrecioProducto[]
+
+  @@index([categoriaId])
+  @@index([marcaId])
+}
+
+model Variante {
+  id           Int      @id @default(autoincrement())
+  productoId   Int
+  producto     Producto @relation(fields: [productoId], references: [id])
+  nombre       String   // ej: "Talle M / Azul"
+  sku          String?  @unique
+  codigoBarras String?  @unique
+  precioVenta  Decimal? // override opcional del precio del producto
+  activo       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  stock            Stock[]
+  movimientosStock MovimientoStock[]
+  itemsVenta       ItemVenta[]
+  itemsCompra      ItemCompra[]
+
+  @@index([productoId])
+}
+
+model ListaPrecio {
+  id        Int      @id @default(autoincrement())
+  nombre    String   @unique // "Minorista", "Mayorista", "Online"
+  activo    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  precios PrecioProducto[]
+}
+
+model PrecioProducto {
+  id            Int         @id @default(autoincrement())
+  productoId    Int
+  producto      Producto    @relation(fields: [productoId], references: [id])
+  listaPrecioId Int
+  listaPrecio   ListaPrecio @relation(fields: [listaPrecioId], references: [id])
+  precio        Decimal
+
+  @@unique([productoId, listaPrecioId])
+}
+
+// ==================== DEPÓSITOS / STOCK ====================
+
+model Deposito {
+  id        Int     @id @default(autoincrement())
+  nombre    String  @unique // "Depósito Central" (única fila hoy; base para sucursales)
+  direccion String?
+  principal Boolean @default(false)
+  activo    Boolean @default(true)
+
+  stock            Stock[]
+  movimientosStock MovimientoStock[]
+}
+
+model Stock {
+  id         Int       @id @default(autoincrement())
+  productoId Int
+  producto   Producto  @relation(fields: [productoId], references: [id])
+  varianteId Int?
+  variante   Variante? @relation(fields: [varianteId], references: [id])
+  depositoId Int
+  deposito   Deposito  @relation(fields: [depositoId], references: [id])
+  cantidad   Int       @default(0)
+  updatedAt  DateTime  @updatedAt
+
+  @@unique([productoId, varianteId, depositoId])
+  @@index([depositoId])
+}
+
+model MovimientoStock {
+  id              Int       @id @default(autoincrement())
+  productoId      Int
+  producto        Producto  @relation(fields: [productoId], references: [id])
+  varianteId      Int?
+  variante        Variante? @relation(fields: [varianteId], references: [id])
+  depositoId      Int
+  deposito        Deposito  @relation(fields: [depositoId], references: [id])
+  tipo            String    // INGRESO | EGRESO | AJUSTE | VENTA | DEVOLUCION | TRANSFERENCIA_SALIDA | TRANSFERENCIA_ENTRADA | COMPRA
+  cantidad        Int       // signo según tipo (+ ingreso, - egreso)
+  stockAnterior   Int
+  stockNuevo      Int
+  motivo          String?
+  referenciaTipo  String?   // "VENTA" | "COMPRA" | "DEVOLUCION" | null
+  referenciaId    Int?
+  usuarioId       Int
+  usuario         Usuario   @relation(fields: [usuarioId], references: [id])
+  createdAt       DateTime  @default(now())
+
+  @@index([productoId])
+  @@index([depositoId])
+  @@index([tipo])
+  @@index([referenciaTipo, referenciaId])
+}
+
+// ==================== CLIENTES ====================
+
+model Cliente {
+  id                    Int       @id @default(autoincrement())
+  nombre                String
+  documento             String?   @unique
+  email                 String?
+  telefono              String?
+  direccion             String?
+  limiteCuentaCorriente Decimal?
+  activo                Boolean   @default(true)
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  ventas        Venta[]
+  devoluciones  Devolucion[]
+  movimientosCC MovimientoCuentaCorriente[]
+}
+
+model MovimientoCuentaCorriente {
+  id            Int      @id @default(autoincrement())
+  clienteId     Int
+  cliente       Cliente  @relation(fields: [clienteId], references: [id])
+  tipo          String   // DEBITO (compra a cuenta) | CREDITO (pago recibido)
+  monto         Decimal
+  ventaId       Int?
+  venta         Venta?   @relation(fields: [ventaId], references: [id])
+  saldoAnterior Decimal
+  saldoNuevo    Decimal
+  createdAt     DateTime @default(now())
+
+  @@index([clienteId])
+}
+
+// ==================== CAJA ====================
+
+model Caja {
+  id                   Int       @id @default(autoincrement())
+  usuarioAperturaId    Int
+  usuarioApertura      Usuario   @relation("CajaApertura", fields: [usuarioAperturaId], references: [id])
+  usuarioCierreId      Int?
+  usuarioCierre        Usuario?  @relation("CajaCierre", fields: [usuarioCierreId], references: [id])
+  montoApertura        Decimal
+  montoCierreDeclarado Decimal?
+  montoCierreSistema   Decimal?
+  diferencia           Decimal?
+  estado               String    @default("ABIERTA") // ABIERTA | CERRADA
+  fechaApertura        DateTime  @default(now())
+  fechaCierre          DateTime?
+  observaciones        String?
+
+  ventas      Venta[]
+  movimientos MovimientoCaja[]
+
+  @@index([estado])
+}
+
+model MovimientoCaja {
+  id        Int      @id @default(autoincrement())
+  cajaId    Int
+  caja      Caja     @relation(fields: [cajaId], references: [id])
+  tipo      String   // INGRESO | EGRESO | VENTA | RETIRO | POZO_INICIAL
+  monto     Decimal
+  concepto  String
+  usuarioId Int
+  usuario   Usuario  @relation(fields: [usuarioId], references: [id])
+  ventaId   Int?
+  venta     Venta?   @relation(fields: [ventaId], references: [id])
+  createdAt DateTime @default(now())
+
+  @@index([cajaId])
+  @@index([tipo])
+}
+
+// ==================== VENTAS ====================
+
+model Venta {
+  id              Int       @id @default(autoincrement())
+  numero          String    @unique // ej: "0001-00000123"
+  clienteId       Int?
+  cliente         Cliente?  @relation(fields: [clienteId], references: [id])
+  usuarioId       Int
+  usuario         Usuario   @relation(fields: [usuarioId], references: [id])
+  cajaId          Int
+  caja            Caja      @relation(fields: [cajaId], references: [id])
+  subtotal        Decimal
+  descuentoTotal  Decimal   @default(0)
+  total           Decimal
+  estado          String    @default("COMPLETADA") // PENDIENTE | COMPLETADA | ANULADA
+  motivoAnulacion String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  items         ItemVenta[]
+  pagos         Pago[]
+  movimientosCaja MovimientoCaja[]
+  devoluciones  Devolucion[]
+  movimientosCC MovimientoCuentaCorriente[]
+
+  @@index([clienteId])
+  @@index([usuarioId])
+  @@index([cajaId])
+  @@index([estado])
+  @@index([createdAt])
+}
+
+model ItemVenta {
+  id             Int       @id @default(autoincrement())
+  ventaId        Int
+  venta          Venta     @relation(fields: [ventaId], references: [id])
+  productoId     Int
+  producto       Producto  @relation(fields: [productoId], references: [id])
+  varianteId     Int?
+  variante       Variante? @relation(fields: [varianteId], references: [id])
+  cantidad       Int
+  precioUnitario Decimal
+  costoUnitario  Decimal   @default(0) // snapshot del precioCosto al momento de la venta, para rentabilidad histórica
+  descuento      Decimal   @default(0)
+  subtotal       Decimal
+
+  itemsDevolucion ItemDevolucion[]
+
+  @@index([ventaId])
+  @@index([productoId])
+}
+
+model MedioPago {
+  id                 Int     @id @default(autoincrement())
+  nombre             String  @unique // EFECTIVO | DEBITO | CREDITO | TRANSFERENCIA | MERCADO_PAGO | QR
+  activo             Boolean @default(true)
+  requiereReferencia Boolean @default(false)
+
+  pagos Pago[]
+}
+
+model Pago {
+  id          Int       @id @default(autoincrement())
+  ventaId     Int
+  venta       Venta     @relation(fields: [ventaId], references: [id])
+  medioPagoId Int
+  medioPago   MedioPago @relation(fields: [medioPagoId], references: [id])
+  monto       Decimal
+  cuotas      Int?
+  recargo     Decimal?  @default(0)
+  referencia  String?   // nro de operación / lote / id Mercado Pago
+  createdAt   DateTime  @default(now())
+
+  @@index([ventaId])
+  @@index([medioPagoId])
+}
+
+// ==================== DEVOLUCIONES ====================
+
+model Devolucion {
+  id              Int      @id @default(autoincrement())
+  ventaOriginalId Int
+  ventaOriginal   Venta    @relation(fields: [ventaOriginalId], references: [id])
+  clienteId       Int?
+  cliente         Cliente? @relation(fields: [clienteId], references: [id])
+  tipo            String   // CAMBIO_PRODUCTO | CAMBIO_TALLE | CAMBIO_OTRO_PRODUCTO | REINTEGRO | NOTA_CREDITO
+  montoReintegro  Decimal  @default(0)
+  motivo          String?
+  usuarioId       Int
+  usuario         Usuario  @relation(fields: [usuarioId], references: [id])
+  createdAt       DateTime @default(now())
+
+  items ItemDevolucion[]
+
+  @@index([ventaOriginalId])
+  @@index([tipo])
+}
+
+model ItemDevolucion {
+  id              Int        @id @default(autoincrement())
+  devolucionId    Int
+  devolucion      Devolucion @relation(fields: [devolucionId], references: [id])
+  itemVentaId     Int
+  itemVenta       ItemVenta  @relation(fields: [itemVentaId], references: [id])
+  cantidad        Int
+  productoNuevoId Int?       // usado en cambio de producto/talle
+  varianteNuevaId Int?
+
+  @@index([devolucionId])
+}
+
+// ==================== PROVEEDORES / COMPRAS ====================
+
+model Proveedor {
+  id        Int      @id @default(autoincrement())
+  nombre    String
+  cuit      String?  @unique
+  telefono  String?
+  email     String?
+  direccion String?
+  activo    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  compras Compra[]
+}
+
+model Compra {
+  id          Int       @id @default(autoincrement())
+  numero      String    @unique
+  proveedorId Int
+  proveedor   Proveedor @relation(fields: [proveedorId], references: [id])
+  total       Decimal
+  estado      String    @default("PENDIENTE") // PENDIENTE | RECIBIDA | ANULADA
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  items ItemCompra[]
+
+  @@index([proveedorId])
+  @@index([estado])
+}
+
+model ItemCompra {
+  id             Int       @id @default(autoincrement())
+  compraId       Int
+  compra         Compra    @relation(fields: [compraId], references: [id])
+  productoId     Int
+  producto       Producto  @relation(fields: [productoId], references: [id])
+  varianteId     Int?
+  variante       Variante? @relation(fields: [varianteId], references: [id])
+  cantidad       Int
+  precioUnitario Decimal
+  subtotal       Decimal
+
+  @@index([compraId])
+}
+
+// ============================================================================
+// Migración futura a PostgreSQL:
+// 1. Cambiar datasource.provider a "postgresql" y DATABASE_URL al connection
+//    string de Postgres.
+// 2. Convertir los campos String usados como "enum" (tipo, estado, nombre de
+//    Rol/MedioPago) a `enum` nativo de Prisma si se desea integridad a nivel
+//    de motor (opcional, la app ya valida esto con zod).
+// 3. Regenerar migraciones con `prisma migrate dev` contra Postgres; el
+//    historial de SQLite no es reutilizable 1:1 pero el schema.prisma sí.
+// 4. Los repositorios y servicios no cambian: solo dependen de Prisma Client.
+// ============================================================================
