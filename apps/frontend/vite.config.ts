@@ -5,6 +5,10 @@ import { defineConfig } from "vite";
 
 // https://vite.dev/config/
 export default defineConfig({
+  // Rutas relativas: el build final se carga vía file:// en Electron
+  // (BrowserWindow.loadFile), y con base "/" los assets resolverían contra
+  // la raíz del disco en vez de la carpeta empaquetada.
+  base: "./",
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {
