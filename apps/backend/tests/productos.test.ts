@@ -1,6 +1,6 @@
 import request from "supertest";
 import { beforeAll, describe, expect, it } from "vitest";
-import { codigoUnico, getApp, loginAsAdmin } from "./helpers.js";
+import { getApp, loginAsAdmin } from "./helpers.js";
 
 describe("productos", () => {
   const app = getApp();
@@ -16,7 +16,6 @@ describe("productos", () => {
       .set("Authorization", `Bearer ${token}`)
       .send({
         nombre: "Producto inválido",
-        codigoInterno: codigoUnico("BAD"),
         precioCosto: 1000,
         precioVenta: 500,
         stockMinimo: 0,
@@ -24,40 +23,43 @@ describe("productos", () => {
     expect(res.status).toBe(400);
   });
 
-  it("crea un producto válido y lo encuentra por código de barras", async () => {
-    const codigoBarras = codigoUnico("BARCODE");
+  it("genera codigoInterno y codigoBarras automáticamente y lo encuentra por código de barras", async () => {
     const crear = await request(app)
       .post("/api/productos")
       .set("Authorization", `Bearer ${token}`)
       .send({
         nombre: "Producto de test",
-        codigoInterno: codigoUnico("INT"),
-        codigoBarras,
         precioCosto: 100,
         precioVenta: 200,
         stockMinimo: 1,
       });
     expect(crear.status).toBe(201);
+    expect(crear.body.codigoInterno).toMatch(/^P\d{6}$/);
+    expect(crear.body.codigoBarras).toMatch(/^2\d{12}$/);
 
     const buscar = await request(app)
-      .get(`/api/productos/buscar/${codigoBarras}`)
+      .get(`/api/productos/buscar/${crear.body.codigoBarras}`)
       .set("Authorization", `Bearer ${token}`);
     expect(buscar.status).toBe(200);
     expect(buscar.body.id).toBe(crear.body.id);
   });
 
-  it("rechaza codigoInterno duplicado (409)", async () => {
-    const codigoInterno = codigoUnico("DUP");
+  it("nunca genera codigoInterno ni codigoBarras repetidos entre dos productos", async () => {
+    const datos = { nombre: "Repetido", precioCosto: 10, precioVenta: 20, stockMinimo: 0 };
+
     const primero = await request(app)
       .post("/api/productos")
       .set("Authorization", `Bearer ${token}`)
-      .send({ nombre: "A", codigoInterno, precioCosto: 10, precioVenta: 20, stockMinimo: 0 });
+      .send(datos);
     expect(primero.status).toBe(201);
 
     const segundo = await request(app)
       .post("/api/productos")
       .set("Authorization", `Bearer ${token}`)
-      .send({ nombre: "B", codigoInterno, precioCosto: 10, precioVenta: 20, stockMinimo: 0 });
-    expect(segundo.status).toBe(409);
+      .send(datos);
+    expect(segundo.status).toBe(201);
+
+    expect(segundo.body.codigoInterno).not.toBe(primero.body.codigoInterno);
+    expect(segundo.body.codigoBarras).not.toBe(primero.body.codigoBarras);
   });
 });

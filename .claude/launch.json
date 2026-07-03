@@ -2,8 +2,14 @@
   "version": "0.0.1",
   "configurations": [
     {
+      "name": "backend",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@pos/backend", "dev"],
+      "port": 4000
+    },
+    {
       "name": "frontend",
-      "runtimeExecutable": "/opt/homebrew/bin/pnpm",
+      "runtimeExecutable": "pnpm",
       "runtimeArgs": ["--filter", "@pos/frontend", "dev"],
       "port": 5173
     }
