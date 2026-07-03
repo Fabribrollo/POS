@@ -7,6 +7,7 @@ import type {
 import { BusinessRuleError, NotFoundError } from "../../core/errors/AppError.js";
 import * as categoriasRepository from "../categorias/categorias.repository.js";
 import * as marcasRepository from "../marcas/marcas.repository.js";
+import { importarDesdeCsv } from "./productos.import.js";
 import * as productosRepository from "./productos.repository.js";
 
 async function validarCategoriaYMarca(categoriaId?: number, marcaId?: number): Promise<void> {
@@ -39,6 +40,10 @@ export async function buscarProductoPorCodigo(codigo: string) {
 export async function crearProducto(input: CrearProductoInput) {
   await validarCategoriaYMarca(input.categoriaId, input.marcaId);
   return productosRepository.crear(input);
+}
+
+export function importarProductos(contenido: string) {
+  return importarDesdeCsv(contenido);
 }
 
 export async function actualizarProducto(id: number, input: ActualizarProductoInput) {

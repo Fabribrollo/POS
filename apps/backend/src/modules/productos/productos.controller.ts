@@ -4,8 +4,10 @@ import type {
   ActualizarVarianteInput,
   CrearProductoInput,
   CrearVarianteInput,
+  ImportarProductosInput,
 } from "@pos/shared";
 import { parseId } from "../../core/utils/parseId.js";
+import { generarPlantillaXlsx } from "./productos.plantilla.js";
 import * as productosService from "./productos.service.js";
 
 export async function listarController(_req: Request, res: Response): Promise<void> {
@@ -32,6 +34,19 @@ export async function actualizarController(req: Request, res: Response): Promise
 
 export async function desactivarController(req: Request, res: Response): Promise<void> {
   res.json(await productosService.desactivarProducto(parseId(req.params.id)));
+}
+
+export async function importarController(req: Request, res: Response): Promise<void> {
+  const { contenido } = req.body as ImportarProductosInput;
+  res.json(await productosService.importarProductos(contenido));
+}
+
+export function plantillaController(_req: Request, res: Response): void {
+  res
+    .status(200)
+    .set("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    .set("Content-Disposition", 'attachment; filename="plantilla-productos.xlsx"')
+    .send(generarPlantillaXlsx());
 }
 
 export async function listarVariantesController(req: Request, res: Response): Promise<void> {

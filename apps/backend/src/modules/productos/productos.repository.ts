@@ -1,4 +1,6 @@
+import { randomUUID } from "node:crypto";
 import { prisma } from "../../core/prisma.js";
+import { generarCodigoBarras, generarCodigoInterno } from "./productos.codigos.js";
 
 const includeCatalogo = {
   categoria: true,
@@ -33,8 +35,6 @@ export function buscarPorCodigo(codigo: string) {
 export function crear(data: {
   nombre: string;
   descripcion?: string;
-  codigoInterno: string;
-  codigoBarras?: string;
   sku?: string;
   categoriaId?: number;
   marcaId?: number;
@@ -42,7 +42,22 @@ export function crear(data: {
   precioVenta: number;
   stockMinimo: number;
 }) {
-  return prisma.producto.create({ data, include: includeCatalogo });
+  // codigoInterno y codigoBarras se derivan del id autoincremental, así que
+  // el producto se crea primero con un placeholder único (para satisfacer el
+  // NOT NULL) y se actualiza en la misma transacción ya con el id en mano.
+  return prisma.$transaction(async (tx) => {
+    const creado = await tx.producto.create({
+      data: { ...data, codigoInterno: randomUUID() },
+    });
+    return tx.producto.update({
+      where: { id: creado.id },
+      data: {
+        codigoInterno: generarCodigoInterno(creado.id),
+        codigoBarras: generarCodigoBarras(creado.id),
+      },
+      include: includeCatalogo,
+    });
+  });
 }
 
 export function actualizar(id: number, data: Record<string, unknown>) {
