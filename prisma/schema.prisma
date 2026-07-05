@@ -129,10 +129,11 @@ model Variante {
   id           Int      @id @default(autoincrement())
   productoId   Int
   producto     Producto @relation(fields: [productoId], references: [id])
-  nombre       String   // ej: "Talle M / Azul"
+  nombre       String   // derivado de color/talle, ej: "Azul / M" (ver nombreVariante)
+  color        String?
+  talle        String?
   sku          String?  @unique
   codigoBarras String?  @unique
-  precioVenta  Decimal? // override opcional del precio del producto
   activo       Boolean  @default(true)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt

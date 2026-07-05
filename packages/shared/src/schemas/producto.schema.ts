@@ -22,6 +22,6 @@ export const actualizarProductoSchema = crearProductoSchema.innerType().partial(
 export type ActualizarProductoInput = z.infer<typeof actualizarProductoSchema>;
 
 export const importarProductosSchema = z.object({
-  contenido: z.string().min(1, "El archivo está vacío"),
+  archivoBase64: z.string().min(1, "El archivo está vacío"),
 });
 export type ImportarProductosInput = z.infer<typeof importarProductosSchema>;

@@ -19,7 +19,7 @@ export async function buscarPorIdController(req: Request, res: Response): Promis
 }
 
 export async function buscarPorCodigoController(req: Request, res: Response): Promise<void> {
-  res.json(await productosService.buscarProductoPorCodigo(req.params.codigo));
+  res.json(await productosService.escanearCodigo(req.params.codigo));
 }
 
 export async function crearController(req: Request, res: Response): Promise<void> {
@@ -37,8 +37,8 @@ export async function desactivarController(req: Request, res: Response): Promise
 }
 
 export async function importarController(req: Request, res: Response): Promise<void> {
-  const { contenido } = req.body as ImportarProductosInput;
-  res.json(await productosService.importarProductos(contenido));
+  const { archivoBase64 } = req.body as ImportarProductosInput;
+  res.json(await productosService.importarProductos(archivoBase64, req.usuario!.id));
 }
 
 export function plantillaController(_req: Request, res: Response): void {
@@ -59,6 +59,7 @@ export async function crearVarianteController(req: Request, res: Response): Prom
   const variante = await productosService.crearVariante(
     productoId,
     req.body as CrearVarianteInput,
+    req.usuario!.id,
   );
   res.status(201).json(variante);
 }
@@ -68,6 +69,7 @@ export async function actualizarVarianteController(req: Request, res: Response):
   const variante = await productosService.actualizarVariante(
     varianteId,
     req.body as ActualizarVarianteInput,
+    req.usuario!.id,
   );
   res.json(variante);
 }

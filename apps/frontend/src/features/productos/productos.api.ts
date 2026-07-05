@@ -1,5 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { ActualizarProductoInput, CrearProductoInput } from "@pos/shared";
+import type {
+  ActualizarProductoInput,
+  ActualizarVarianteInput,
+  CrearProductoInput,
+  CrearVarianteInput,
+} from "@pos/shared";
 import { api } from "@/shared/api/client";
 
 export interface Categoria {
@@ -17,15 +22,41 @@ export interface Producto {
   codigoBarras: string | null;
   precioCosto: string;
   precioVenta: string;
-  stockMinimo: number;
+  // Suma del stock de todas las variantes del producto; no es un campo
+  // editable, se calcula en el backend a partir de los movimientos de stock.
+  stockTotal: number;
   categoria: Categoria | null;
   marca: Marca | null;
+  variantes?: Variante[];
+}
+
+export interface Variante {
+  id: number;
+  productoId: number;
+  nombre: string;
+  color: string | null;
+  talle: string | null;
+  sku: string | null;
+  codigoBarras: string | null;
+  // Igual que Producto.stockTotal: suma calculada, no un campo propio.
+  stock: number;
+  activo: boolean;
 }
 
 export interface ResultadoImportacion {
-  productosCreados: number;
-  variantesCreadas: number;
-  errores: { fila: number; motivo: string }[];
+  importado: boolean;
+  productosNuevos: number;
+  variantesNuevas: number;
+  errores: { hoja: "Productos" | "Variantes"; fila: number; motivo: string }[];
+}
+
+function archivoABase64(archivo: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const lector = new FileReader();
+    lector.onload = () => resolve((lector.result as string).split(",")[1]);
+    lector.onerror = () => reject(lector.error);
+    lector.readAsDataURL(archivo);
+  });
 }
 
 export function useProductos() {
@@ -61,11 +92,50 @@ export function useDesactivarProducto() {
   });
 }
 
+export function useVariantes(productoId: number | undefined) {
+  return useQuery({
+    queryKey: ["productos", productoId, "variantes"],
+    queryFn: async () => (await api.get<Variante[]>(`/productos/${productoId}/variantes`)).data,
+    enabled: productoId != null,
+  });
+}
+
+export function useCrearVariante(productoId: number) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: CrearVarianteInput) =>
+      (await api.post<Variante>(`/productos/${productoId}/variantes`, input)).data,
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ["productos", productoId, "variantes"] }),
+  });
+}
+
+export function useActualizarVariante(productoId: number) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, input }: { id: number; input: ActualizarVarianteInput }) =>
+      (await api.patch<Variante>(`/productos/variantes/${id}`, input)).data,
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ["productos", productoId, "variantes"] }),
+  });
+}
+
+export function useDesactivarVariante(productoId: number) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: number) => (await api.delete(`/productos/variantes/${id}`)).data,
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ["productos", productoId, "variantes"] }),
+  });
+}
+
 export function useImportarProductos() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (contenido: string) =>
-      (await api.post<ResultadoImportacion>("/productos/importar", { contenido })).data,
+    mutationFn: async (archivo: File) => {
+      const archivoBase64 = await archivoABase64(archivo);
+      return (await api.post<ResultadoImportacion>("/productos/importar", { archivoBase64 })).data;
+    },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["productos"] }),
   });
 }

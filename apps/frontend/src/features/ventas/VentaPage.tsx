@@ -3,6 +3,12 @@ import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -20,9 +26,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { formatearMoneda } from "@/lib/utils";
 import { extraerMensajeError } from "@/shared/api/client";
 import { useCarritoStore } from "@/shared/stores/carrito.store";
-import { buscarProductoPorCodigo, useCajaAbierta, useCrearVenta } from "./ventas.api";
+import type { Producto } from "../productos/productos.api";
+import { escanearCodigo, useCajaAbierta, useCrearVenta } from "./ventas.api";
 
 const MEDIOS_PAGO = ["EFECTIVO", "DEBITO", "CREDITO", "TRANSFERENCIA", "MERCADO_PAGO", "QR"] as const;
 
@@ -31,36 +39,92 @@ interface PagoForm {
   monto: string;
 }
 
+function redondear(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
+// Monto de descuento de la línea, a partir del % cargado en el carrito.
+function descuentoLinea(item: { cantidad: number; precioUnitario: number; descuentoPorcentaje: number }): number {
+  return redondear((item.cantidad * item.precioUnitario * item.descuentoPorcentaje) / 100);
+}
+
 export function VentaPage() {
   const { data: caja, isLoading: cargandoCaja } = useCajaAbierta();
-  const { items, agregar, quitar, setCantidad, limpiar } = useCarritoStore();
+  const { items, agregar, quitar, setCantidad, setDescuentoPorcentaje, limpiar } = useCarritoStore();
   const [codigo, setCodigo] = useState("");
   const [descuentoTotal, setDescuentoTotal] = useState("0");
   const [pagos, setPagos] = useState<PagoForm[]>([{ medioPago: "EFECTIVO", monto: "" }]);
+  const [productoParaElegir, setProductoParaElegir] = useState<Producto | null>(null);
   const crearVenta = useCrearVenta();
 
-  const subtotal = items.reduce((acc, i) => acc + i.cantidad * i.precioUnitario - i.descuento, 0);
+  const subtotal = items.reduce(
+    (acc, i) => acc + i.cantidad * i.precioUnitario - descuentoLinea(i),
+    0,
+  );
   const total = Math.max(0, subtotal - Number(descuentoTotal || 0));
   const totalPagos = pagos.reduce((acc, p) => acc + Number(p.monto || 0), 0);
+
+  function agregarAlCarrito(
+    producto: Producto,
+    varianteId?: number,
+    nombreVariante?: string,
+    stockDisponible: number = producto.stockTotal,
+  ) {
+    const existente = items.find((i) => i.productoId === producto.id && i.varianteId === varianteId);
+    if ((existente?.cantidad ?? 0) >= stockDisponible) {
+      toast.error("No hay más stock disponible de esta variante");
+      return;
+    }
+    agregar({
+      productoId: producto.id,
+      varianteId,
+      nombre: nombreVariante ? `${producto.nombre} (${nombreVariante})` : producto.nombre,
+      precioUnitario: Number(producto.precioVenta),
+      stockDisponible,
+    });
+  }
 
   async function buscarYAgregar(e: React.FormEvent) {
     e.preventDefault();
     if (!codigo.trim()) return;
     try {
-      const producto = await buscarProductoPorCodigo(codigo.trim());
-      agregar({
-        productoId: producto.id,
-        nombre: producto.nombre,
-        precioUnitario: Number(producto.precioVenta),
-      });
+      const resultado = await escanearCodigo(codigo.trim());
+      if (resultado.tipo === "elegir_variante") {
+        setProductoParaElegir(resultado.producto);
+      } else if (resultado.tipo === "variante") {
+        agregarAlCarrito(
+          resultado.producto,
+          resultado.variante.id,
+          resultado.variante.nombre,
+          resultado.variante.stock,
+        );
+      } else {
+        agregarAlCarrito(resultado.producto);
+      }
       setCodigo("");
     } catch (err) {
       toast.error(extraerMensajeError(err));
     }
   }
 
+  function elegirVariante(varianteId: number, nombreVariante: string, stockDisponible: number) {
+    if (!productoParaElegir) return;
+    agregarAlCarrito(productoParaElegir, varianteId, nombreVariante, stockDisponible);
+    setProductoParaElegir(null);
+  }
+
   function actualizarPago(index: number, cambios: Partial<PagoForm>) {
     setPagos((prev) => prev.map((p, i) => (i === index ? { ...p, ...cambios } : p)));
+  }
+
+  // Lo que falta pagar considerando los demás medios de pago ya cargados;
+  // nunca negativo, para no poder "rellenar" por encima del total.
+  function restantePorPagar(index: number): number {
+    const pagadoEnOtros = pagos.reduce(
+      (acc, p, i) => (i === index ? acc : acc + Number(p.monto || 0)),
+      0,
+    );
+    return Math.max(0, redondear(total - pagadoEnOtros));
   }
 
   async function confirmarVenta() {
@@ -72,9 +136,10 @@ export function VentaPage() {
       await crearVenta.mutateAsync({
         items: items.map((i) => ({
           productoId: i.productoId,
+          varianteId: i.varianteId,
           cantidad: i.cantidad,
           precioUnitario: i.precioUnitario,
-          descuento: i.descuento,
+          descuento: descuentoLinea(i),
         })),
         descuentoTotal: Number(descuentoTotal || 0),
         pagos: pagos
@@ -127,29 +192,58 @@ export function VentaPage() {
               <TableHead>Producto</TableHead>
               <TableHead className="w-24">Cantidad</TableHead>
               <TableHead className="text-right">Precio</TableHead>
+              <TableHead className="w-24 text-right">Descuento %</TableHead>
               <TableHead className="text-right">Subtotal</TableHead>
               <TableHead />
             </TableRow>
           </TableHeader>
           <TableBody>
             {items.map((item) => (
-              <TableRow key={item.productoId}>
-                <TableCell>{item.nombre}</TableCell>
+              <TableRow key={`${item.productoId}-${item.varianteId ?? "sin-variante"}`}>
+                <TableCell>
+                  {item.nombre}
+                  <span className="block text-xs text-muted-foreground">
+                    Stock disponible: {item.stockDisponible}
+                  </span>
+                </TableCell>
                 <TableCell>
                   <Input
                     type="number"
                     min={1}
+                    max={item.stockDisponible}
                     value={item.cantidad}
-                    onChange={(e) => setCantidad(item.productoId, Number(e.target.value))}
+                    onChange={(e) =>
+                      setCantidad(item.productoId, item.varianteId, Number(e.target.value))
+                    }
                     className="w-20"
                   />
                 </TableCell>
-                <TableCell className="text-right">${item.precioUnitario}</TableCell>
+                <TableCell className="text-right">${formatearMoneda(item.precioUnitario)}</TableCell>
                 <TableCell className="text-right">
-                  ${(item.cantidad * item.precioUnitario - item.descuento).toFixed(2)}
+                  <Input
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={item.descuentoPorcentaje}
+                    onChange={(e) =>
+                      setDescuentoPorcentaje(
+                        item.productoId,
+                        item.varianteId,
+                        Number(e.target.value),
+                      )
+                    }
+                    className="w-20 text-right"
+                  />
+                </TableCell>
+                <TableCell className="text-right">
+                  ${formatearMoneda(item.cantidad * item.precioUnitario - descuentoLinea(item))}
                 </TableCell>
                 <TableCell>
-                  <Button variant="ghost" size="sm" onClick={() => quitar(item.productoId)}>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => quitar(item.productoId, item.varianteId)}
+                  >
                     Quitar
                   </Button>
                 </TableCell>
@@ -157,7 +251,7 @@ export function VentaPage() {
             ))}
             {items.length === 0 && (
               <TableRow>
-                <TableCell colSpan={5} className="text-center text-sm text-muted-foreground">
+                <TableCell colSpan={6} className="text-center text-sm text-muted-foreground">
                   El carrito está vacío
                 </TableCell>
               </TableRow>
@@ -174,7 +268,7 @@ export function VentaPage() {
           <div className="space-y-1 text-sm">
             <div className="flex justify-between">
               <span>Subtotal</span>
-              <span>${subtotal.toFixed(2)}</span>
+              <span>${formatearMoneda(subtotal)}</span>
             </div>
             <div className="flex items-center justify-between gap-2">
               <span>Descuento</span>
@@ -187,7 +281,7 @@ export function VentaPage() {
             </div>
             <div className="flex justify-between font-semibold">
               <span>Total</span>
-              <span>${total.toFixed(2)}</span>
+              <span>${formatearMoneda(total)}</span>
             </div>
           </div>
 
@@ -216,6 +310,13 @@ export function VentaPage() {
                   value={pago.monto}
                   onChange={(e) => actualizarPago(index, { monto: e.target.value })}
                 />
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => actualizarPago(index, { monto: String(restantePorPagar(index)) })}
+                >
+                  Total
+                </Button>
               </div>
             ))}
             <Button
@@ -227,7 +328,7 @@ export function VentaPage() {
               + Agregar medio de pago
             </Button>
             <p className="text-xs text-muted-foreground">
-              Pagado: ${totalPagos.toFixed(2)} / ${total.toFixed(2)}
+              Pagado: ${formatearMoneda(totalPagos)} / ${formatearMoneda(total)}
             </p>
           </div>
 
@@ -236,6 +337,31 @@ export function VentaPage() {
           </Button>
         </CardContent>
       </Card>
+
+      <Dialog
+        open={productoParaElegir != null}
+        onOpenChange={(v) => !v && setProductoParaElegir(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Elegí la variante de "{productoParaElegir?.nombre}"</DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-col gap-2">
+            {productoParaElegir?.variantes?.map((v) => (
+              <Button
+                key={v.id}
+                variant="outline"
+                className="justify-between"
+                disabled={v.stock <= 0}
+                onClick={() => elegirVariante(v.id, v.nombre, v.stock)}
+              >
+                <span>{v.nombre}</span>
+                <span className="text-xs text-muted-foreground">Stock: {v.stock}</span>
+              </Button>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
