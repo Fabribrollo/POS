@@ -19,6 +19,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { formatearMoneda } from "@/lib/utils";
 import { extraerMensajeError } from "@/shared/api/client";
 import {
   useAbrirCaja,
@@ -128,8 +129,8 @@ function CajaAbierta({ cajaId, montoApertura }: { cajaId: number; montoApertura:
           <CardTitle>Caja cerrada</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2 text-sm">
-          <p>Monto según sistema: ${cierreResultado.montoCierreSistema}</p>
-          <p>Diferencia: ${cierreResultado.diferencia}</p>
+          <p>Monto según sistema: ${formatearMoneda(cierreResultado.montoCierreSistema)}</p>
+          <p>Diferencia: ${formatearMoneda(cierreResultado.diferencia)}</p>
           <p className="text-muted-foreground">Podés abrir una nueva caja cuando quieras.</p>
         </CardContent>
       </Card>
@@ -140,7 +141,7 @@ function CajaAbierta({ cajaId, montoApertura }: { cajaId: number; montoApertura:
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle>Caja abierta — apertura ${montoApertura}</CardTitle>
+          <CardTitle>Caja abierta — apertura ${formatearMoneda(montoApertura)}</CardTitle>
         </CardHeader>
         <CardContent>
           <Table>
@@ -156,7 +157,7 @@ function CajaAbierta({ cajaId, montoApertura }: { cajaId: number; montoApertura:
                 <TableRow key={m.id}>
                   <TableCell>{m.tipo}</TableCell>
                   <TableCell>{m.concepto}</TableCell>
-                  <TableCell className="text-right">${m.monto}</TableCell>
+                  <TableCell className="text-right">${formatearMoneda(m.monto)}</TableCell>
                 </TableRow>
               ))}
             </TableBody>

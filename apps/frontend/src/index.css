@@ -128,3 +128,15 @@
     @apply font-sans;
     }
 }
+
+/* Imprimir un reporte: solo el contenido, sin sidebar/filtros/botones. */
+@media print {
+  aside,
+  .no-imprimir {
+    display: none !important;
+  }
+  main {
+    overflow: visible !important;
+    padding: 0 !important;
+  }
+}

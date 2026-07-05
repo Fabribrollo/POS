@@ -24,7 +24,10 @@ export function createServer(): Express {
   const app = express();
 
   app.use(cors());
-  app.use(express.json());
+  // 15mb: la importación de productos manda el .xlsx completo como base64 en
+  // el body (evita sumar multer solo para este endpoint); el default de
+  // express (100kb) alcanza para el resto de la API pero no para un archivo.
+  app.use(express.json({ limit: "15mb" }));
 
   app.use("/api/health", healthRouter);
   app.use("/api/auth", authRouter);
