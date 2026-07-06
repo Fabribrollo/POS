@@ -5,6 +5,7 @@ import { asyncHandler } from "../../core/middlewares/asyncHandler.js";
 import { validate } from "../../core/middlewares/validate.js";
 import {
   buscarController,
+  buscarPorNumeroController,
   crearController,
   listarPorVentaController,
 } from "./devoluciones.controller.js";
@@ -14,5 +15,6 @@ export const devolucionesRouter: Router = Router();
 devolucionesRouter.use(authGuard, roleGuard("DEVOLUCIONES_CREAR"));
 
 devolucionesRouter.post("/", validate(crearDevolucionSchema), asyncHandler(crearController));
-devolucionesRouter.get("/:id", asyncHandler(buscarController));
+devolucionesRouter.get("/buscar/:numero", asyncHandler(buscarPorNumeroController));
 devolucionesRouter.get("/venta/:ventaId", asyncHandler(listarPorVentaController));
+devolucionesRouter.get("/:id", asyncHandler(buscarController));

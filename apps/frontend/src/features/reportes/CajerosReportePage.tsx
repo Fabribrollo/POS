@@ -2,7 +2,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { EstadoConsulta } from "./components/EstadoConsulta";
 import { ExportarBotones } from "./components/ExportarBotones";
-import { RangoFechasPicker, rangoUltimosDias, type RangoFechasValor } from "./components/RangoFechasPicker";
+import { RangoFechasPicker, rangoQueryParams, rangoUltimosDias, type RangoFechasValor } from "./components/RangoFechasPicker";
 import { type ColumnaTabla, TablaOrdenable } from "./components/TablaOrdenable";
 import { descargarExportacion, useReporteCajeros, type CajeroReporte } from "./reportes.api";
 import { formatearMoneda } from "@/lib/utils";
@@ -52,8 +52,7 @@ export function CajerosReportePage() {
   const [exportando, setExportando] = useState(false);
 
   const filtros = {
-    desde: rango.desde,
-    hasta: rango.hasta,
+    ...rangoQueryParams(rango),
     busqueda: busqueda || undefined,
     pagina,
     porPagina: 20,
@@ -77,7 +76,7 @@ export function CajerosReportePage() {
     try {
       await descargarExportacion(
         `/reportes/cajeros/exportar.${formato}`,
-        { desde: rango.desde, hasta: rango.hasta, busqueda: busqueda || undefined },
+        { ...rangoQueryParams(rango), busqueda: busqueda || undefined },
         `reporte-cajeros.${formato}`,
       );
     } catch (err) {

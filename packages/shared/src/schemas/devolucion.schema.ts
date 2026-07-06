@@ -21,6 +21,10 @@ export const crearDevolucionSchema = z.object({
   tipo: tipoDevolucionEnum,
   motivo: z.string().optional(),
   montoReintegro: z.number().default(0), // positivo: se le devuelve al cliente; negativo: paga la diferencia
+  // Solo se usa cuando la venta original no tiene cliente asociado y el tipo
+  // es NOTA_CREDITO: no hay cuenta corriente sin cliente, así que hay que
+  // indicar a cuál acreditarle el saldo (se crea antes de esta llamada).
+  clienteId: z.number().int().positive().optional(),
   items: z.array(itemDevolucionSchema).min(1, "La devolución debe tener al menos un ítem"),
 });
 export type CrearDevolucionInput = z.infer<typeof crearDevolucionSchema>;

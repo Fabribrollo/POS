@@ -5,10 +5,11 @@ import {
   crearProductoSchema,
   crearVarianteSchema,
   importarProductosSchema,
+  listarProductosQuerySchema,
 } from "@pos/shared";
 import { authGuard, roleGuard } from "../../core/middlewares/authGuard.js";
 import { asyncHandler } from "../../core/middlewares/asyncHandler.js";
-import { validate } from "../../core/middlewares/validate.js";
+import { validate, validateQuery } from "../../core/middlewares/validate.js";
 import {
   actualizarController,
   actualizarVarianteController,
@@ -22,6 +23,7 @@ import {
   listarController,
   listarVariantesController,
   plantillaController,
+  reactivarController,
 } from "./productos.controller.js";
 
 export const productosRouter: Router = Router();
@@ -31,7 +33,12 @@ productosRouter.use(authGuard);
 const leer = roleGuard("PRODUCTOS_LEER");
 const escribir = roleGuard("PRODUCTOS_ESCRIBIR");
 
-productosRouter.get("/", leer, asyncHandler(listarController));
+productosRouter.get(
+  "/",
+  leer,
+  validateQuery(listarProductosQuerySchema),
+  asyncHandler(listarController),
+);
 productosRouter.get("/plantilla", escribir, plantillaController);
 productosRouter.get("/buscar/:codigo", leer, asyncHandler(buscarPorCodigoController));
 productosRouter.get("/:id", leer, asyncHandler(buscarPorIdController));
@@ -49,6 +56,7 @@ productosRouter.patch(
   asyncHandler(actualizarController),
 );
 productosRouter.delete("/:id", escribir, asyncHandler(desactivarController));
+productosRouter.post("/:id/reactivar", escribir, asyncHandler(reactivarController));
 
 productosRouter.get("/:id/variantes", leer, asyncHandler(listarVariantesController));
 productosRouter.post(

@@ -8,6 +8,7 @@ const medioPagoEnum = z.enum([
   MEDIOS_PAGO.TRANSFERENCIA,
   MEDIOS_PAGO.MERCADO_PAGO,
   MEDIOS_PAGO.QR,
+  MEDIOS_PAGO.SALDO_A_FAVOR,
 ]);
 
 export const itemVentaSchema = z.object({

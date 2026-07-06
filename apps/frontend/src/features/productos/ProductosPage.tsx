@@ -1,16 +1,25 @@
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
+import { Layers, type LucideIcon, Package, Plus, Printer, Save, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -22,6 +31,7 @@ import {
 import { formatearMoneda } from "@/lib/utils";
 import { extraerMensajeError } from "@/shared/api/client";
 import { ComboboxCreatable } from "./ComboboxCreatable";
+import { imprimirEtiquetas } from "./etiquetas";
 import {
   descargarPlantillaProductos,
   useActualizarProducto,
@@ -36,7 +46,9 @@ import {
   useImportarProductos,
   useMarcas,
   useProductos,
+  useReactivarProducto,
   useVariantes,
+  type EstadoProducto,
   type Producto,
   type Variante,
 } from "./productos.api";
@@ -87,14 +99,49 @@ function valorOrden(p: Producto, columna: ColumnaOrden): string | number {
   }
 }
 
+// Cada bloque del modal de producto (datos / variantes) se envuelve igual:
+// ícono + título a la izquierda, acción principal a la derecha si hay una.
+function SeccionModal({
+  icono: Icono,
+  titulo,
+  acciones,
+  children,
+}: {
+  icono: LucideIcon;
+  titulo: string;
+  acciones?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="space-y-4 rounded-lg border p-4">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 text-sm font-medium">
+          <Icono className="size-4 text-muted-foreground" />
+          {titulo}
+        </div>
+        {acciones}
+      </div>
+      {children}
+    </section>
+  );
+}
+
 export function ProductosPage() {
-  const { data: productos, isLoading } = useProductos();
+  const [estado, setEstado] = useState<EstadoProducto>("activos");
+  const { data: productos, isLoading } = useProductos(estado);
+  const { data: categorias } = useCategorias();
+  const { data: marcas } = useMarcas();
   const [open, setOpen] = useState(false);
   const [productoEditar, setProductoEditar] = useState<Producto | null>(null);
   const [orden, setOrden] = useState<{ columna: ColumnaOrden; direccion: "asc" | "desc" } | null>(
     null,
   );
+  const [busqueda, setBusqueda] = useState("");
+  const [filtroCategoriaId, setFiltroCategoriaId] = useState("");
+  const [filtroMarcaId, setFiltroMarcaId] = useState("");
+  const [soloStockBajo, setSoloStockBajo] = useState(false);
   const desactivarProducto = useDesactivarProducto();
+  const reactivarProducto = useReactivarProducto();
   const importarProductos = useImportarProductos();
   const inputArchivoRef = useRef<HTMLInputElement>(null);
 
@@ -105,8 +152,28 @@ export function ProductosPage() {
     });
   }
 
+  // Búsqueda y filtros son client-side (la lista completa ya está en
+  // memoria); solo el estado activo/inactivo requiere volver a pedirle al
+  // backend, porque por defecto ni siquiera trae los inactivos.
+  const productosFiltrados = useMemo(() => {
+    const q = busqueda.trim().toLowerCase();
+    return (productos ?? []).filter((p) => {
+      if (filtroCategoriaId && String(p.categoria?.id ?? "") !== filtroCategoriaId) return false;
+      if (filtroMarcaId && String(p.marca?.id ?? "") !== filtroMarcaId) return false;
+      if (soloStockBajo && p.stockTotal > p.stockMinimo) return false;
+      if (q) {
+        const coincide =
+          p.nombre.toLowerCase().includes(q) ||
+          (p.marca?.nombre.toLowerCase().includes(q) ?? false) ||
+          (p.categoria?.nombre.toLowerCase().includes(q) ?? false);
+        if (!coincide) return false;
+      }
+      return true;
+    });
+  }, [productos, busqueda, filtroCategoriaId, filtroMarcaId, soloStockBajo]);
+
   const productosOrdenados = orden
-    ? [...(productos ?? [])].sort((a, b) => {
+    ? [...productosFiltrados].sort((a, b) => {
         const va = valorOrden(a, orden.columna);
         const vb = valorOrden(b, orden.columna);
         const comparacion =
@@ -115,13 +182,22 @@ export function ProductosPage() {
             : String(va).localeCompare(String(vb), "es", { sensitivity: "base" });
         return orden.direccion === "asc" ? comparacion : -comparacion;
       })
-    : productos;
+    : productosFiltrados;
 
   async function handleEliminar(producto: Producto) {
     if (!confirm(`¿Eliminar "${producto.nombre}"?`)) return;
     try {
       await desactivarProducto.mutateAsync(producto.id);
       toast.success("Producto eliminado");
+    } catch (err) {
+      toast.error(extraerMensajeError(err));
+    }
+  }
+
+  async function handleReactivar(producto: Producto) {
+    try {
+      await reactivarProducto.mutateAsync(producto.id);
+      toast.success("Producto reactivado");
     } catch (err) {
       toast.error(extraerMensajeError(err));
     }
@@ -178,6 +254,77 @@ export function ProductosPage() {
         </div>
       </div>
 
+      <div className="flex flex-wrap items-end gap-3">
+        <div className="space-y-1">
+          <Label className="text-xs">Buscar</Label>
+          <Input
+            placeholder="Nombre, marca o categoría"
+            value={busqueda}
+            onChange={(e) => setBusqueda(e.target.value)}
+            className="w-56"
+          />
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs">Categoría</Label>
+          <Select
+            value={filtroCategoriaId || "todas"}
+            onValueChange={(v) => setFiltroCategoriaId(v === "todas" || !v ? "" : v)}
+          >
+            <SelectTrigger className="w-40">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todas">Todas</SelectItem>
+              {categorias?.map((c) => (
+                <SelectItem key={c.id} value={String(c.id)}>
+                  {c.nombre}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs">Marca</Label>
+          <Select
+            value={filtroMarcaId || "todas"}
+            onValueChange={(v) => setFiltroMarcaId(v === "todas" || !v ? "" : v)}
+          >
+            <SelectTrigger className="w-40">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todas">Todas</SelectItem>
+              {marcas?.map((m) => (
+                <SelectItem key={m.id} value={String(m.id)}>
+                  {m.nombre}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs">Estado</Label>
+          <Select value={estado} onValueChange={(v) => setEstado(v as EstadoProducto)}>
+            <SelectTrigger className="w-32">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="activos">Activos</SelectItem>
+              <SelectItem value="inactivos">Inactivos</SelectItem>
+              <SelectItem value="todos">Todos</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <label className="flex items-center gap-2 pb-2 text-sm">
+          <input
+            type="checkbox"
+            checked={soloStockBajo}
+            onChange={(e) => setSoloStockBajo(e.target.checked)}
+          />
+          Solo stock bajo
+        </label>
+      </div>
+
       {isLoading ? (
         <p className="text-sm text-muted-foreground">Cargando...</p>
       ) : (
@@ -220,11 +367,19 @@ export function ProductosPage() {
               >
                 Venta
               </EncabezadoOrdenable>
+              <TableHead>Estado</TableHead>
               <TableHead className="text-right">Acciones</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {productosOrdenados?.map((p) => (
+            {productosOrdenados.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={9} className="text-center text-sm text-muted-foreground">
+                  Sin productos para estos filtros
+                </TableCell>
+              </TableRow>
+            )}
+            {productosOrdenados.map((p) => (
               <TableRow
                 key={p.id}
                 className="cursor-pointer hover:bg-muted/50"
@@ -237,17 +392,35 @@ export function ProductosPage() {
                 <TableCell className="text-right">{p.stockTotal}</TableCell>
                 <TableCell className="text-right">${formatearMoneda(p.precioCosto)}</TableCell>
                 <TableCell className="text-right">${formatearMoneda(p.precioVenta)}</TableCell>
+                <TableCell>
+                  <Badge variant={p.activo ? "outline" : "destructive"}>
+                    {p.activo ? "Activo" : "Inactivo"}
+                  </Badge>
+                </TableCell>
                 <TableCell className="text-right">
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleEliminar(p);
-                    }}
-                  >
-                    Eliminar
-                  </Button>
+                  {p.activo ? (
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleEliminar(p);
+                      }}
+                    >
+                      Eliminar
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleReactivar(p);
+                      }}
+                    >
+                      Reactivar
+                    </Button>
+                  )}
                 </TableCell>
               </TableRow>
             ))}
@@ -256,15 +429,30 @@ export function ProductosPage() {
       )}
 
       <Dialog open={productoEditar != null} onOpenChange={(v) => !v && setProductoEditar(null)}>
-        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
+        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-3xl">
           <DialogHeader>
-            <DialogTitle>{productoEditar?.nombre}</DialogTitle>
+            <div className="flex items-center gap-2">
+              <DialogTitle>{productoEditar?.nombre}</DialogTitle>
+              {productoEditar && (
+                <Badge variant={productoEditar.activo ? "outline" : "destructive"}>
+                  {productoEditar.activo ? "Activo" : "Inactivo"}
+                </Badge>
+              )}
+            </div>
+            {productoEditar && (
+              <DialogDescription>
+                Código interno {productoEditar.codigoInterno}
+                {productoEditar.categoria ? ` · ${productoEditar.categoria.nombre}` : ""}
+                {productoEditar.marca ? ` · ${productoEditar.marca.nombre}` : ""}
+              </DialogDescription>
+            )}
           </DialogHeader>
           {productoEditar && (
-            <div className="space-y-6">
-              <FormularioProducto producto={productoEditar} onDone={() => {}} />
-              <Separator />
-              <VariantesManager productoId={productoEditar.id} />
+            <div className="space-y-4">
+              <SeccionModal icono={Package} titulo="Datos del producto">
+                <FormularioProducto producto={productoEditar} onDone={() => {}} />
+              </SeccionModal>
+              <VariantesManager producto={productoEditar} />
             </div>
           )}
         </DialogContent>
@@ -331,7 +519,7 @@ function FormularioProducto({
         <Label>Nombre</Label>
         <Input value={form.nombre} onChange={(e) => set("nombre", e.target.value)} required />
       </div>
-      <div className="grid grid-cols-2 gap-4">
+      <div className={`grid gap-4 ${producto ? "grid-cols-3" : "grid-cols-2"}`}>
         <div className="space-y-2">
           <Label>Precio costo</Label>
           <Input
@@ -354,12 +542,15 @@ function FormularioProducto({
             required
           />
         </div>
+        {producto && (
+          <div className="space-y-2">
+            <Label className="text-muted-foreground">Stock total</Label>
+            <div className="flex h-9 items-center rounded-md border bg-muted/40 px-3 text-sm font-medium">
+              {producto.stockTotal} unidades
+            </div>
+          </div>
+        )}
       </div>
-      {producto && (
-        <p className="text-sm text-muted-foreground">
-          Stock total (todas las variantes): <span className="font-medium">{producto.stockTotal}</span>
-        </p>
-      )}
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label>Categoría</Label>
@@ -382,14 +573,17 @@ function FormularioProducto({
           />
         </div>
       </div>
-      <Button type="submit" className="w-full" disabled={guardando}>
-        Guardar
-      </Button>
+      <div className="flex justify-end">
+        <Button type="submit" disabled={guardando}>
+          {producto ? "Guardar cambios" : "Crear producto"}
+        </Button>
+      </div>
     </form>
   );
 }
 
-function VariantesManager({ productoId }: { productoId: number }) {
+function VariantesManager({ producto }: { producto: Producto }) {
+  const productoId = producto.id;
   const { data: variantes, isLoading } = useVariantes(productoId);
   const crearVariante = useCrearVariante(productoId);
   const actualizarVariante = useActualizarVariante(productoId);
@@ -422,44 +616,93 @@ function VariantesManager({ productoId }: { productoId: number }) {
     }
   }
 
+  function handleImprimirVariante(variante: Variante) {
+    try {
+      imprimirEtiquetas([
+        {
+          nombreProducto: producto.nombre,
+          nombreVariante: variante.nombre,
+          codigoBarras: variante.codigoBarras ?? "",
+          precioVenta: Number(producto.precioVenta),
+        },
+      ]);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "No se pudo imprimir la etiqueta");
+    }
+  }
+
+  function handleImprimirConStock() {
+    const conStock = (variantes ?? []).filter((v) => v.stock > 0);
+    if (conStock.length === 0) {
+      toast.error("Ninguna variante tiene stock disponible para imprimir");
+      return;
+    }
+    try {
+      imprimirEtiquetas(
+        conStock.map((v) => ({
+          nombreProducto: producto.nombre,
+          nombreVariante: v.nombre,
+          codigoBarras: v.codigoBarras ?? "",
+          precioVenta: Number(producto.precioVenta),
+        })),
+      );
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "No se pudieron imprimir las etiquetas");
+    }
+  }
+
   return (
-    <div className="space-y-3">
-      <h3 className="text-sm font-medium">Variantes</h3>
+    <SeccionModal
+      icono={Layers}
+      titulo={`Variantes${variantes ? ` (${variantes.length})` : ""}`}
+      acciones={
+        <Button type="button" variant="outline" size="sm" onClick={handleImprimirConStock}>
+          <Printer className="size-3.5" />
+          Imprimir con stock
+        </Button>
+      }
+    >
       {isLoading ? (
         <p className="text-sm text-muted-foreground">Cargando...</p>
       ) : (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Nombre</TableHead>
-              <TableHead>Color</TableHead>
-              <TableHead>Talle</TableHead>
-              <TableHead>SKU</TableHead>
-              <TableHead className="text-right">Stock</TableHead>
-              <TableHead className="text-right">Acciones</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {variantes?.length === 0 && (
+        <div className="overflow-hidden rounded-md border">
+          <Table>
+            <TableHeader>
               <TableRow>
-                <TableCell colSpan={6} className="text-center text-sm text-muted-foreground">
-                  Sin variantes todavía
-                </TableCell>
+                <TableHead>Nombre</TableHead>
+                <TableHead>Color</TableHead>
+                <TableHead>Talle</TableHead>
+                <TableHead>SKU</TableHead>
+                <TableHead className="text-right">Stock</TableHead>
+                <TableHead className="text-right">Acciones</TableHead>
               </TableRow>
-            )}
-            {variantes?.map((v) => (
-              <FilaVariante
-                key={v.id}
-                variante={v}
-                onGuardar={(input) => actualizarVariante.mutateAsync({ id: v.id, input })}
-                onEliminar={() => handleEliminar(v)}
-              />
-            ))}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {variantes?.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={6} className="text-center text-sm text-muted-foreground">
+                    Todavía no hay variantes. Agregá la primera abajo.
+                  </TableCell>
+                </TableRow>
+              )}
+              {variantes?.map((v) => (
+                <FilaVariante
+                  key={v.id}
+                  variante={v}
+                  onGuardar={(input) => actualizarVariante.mutateAsync({ id: v.id, input })}
+                  onEliminar={() => handleEliminar(v)}
+                  onImprimir={() => handleImprimirVariante(v)}
+                />
+              ))}
+            </TableBody>
+          </Table>
+        </div>
       )}
 
-      <form onSubmit={handleCrear} className="grid grid-cols-4 items-end gap-2">
+      <form
+        onSubmit={handleCrear}
+        className="grid grid-cols-4 items-end gap-2 rounded-lg border border-dashed p-3"
+      >
         <div className="space-y-1">
           <Label className="text-xs">Color</Label>
           <Input
@@ -488,10 +731,11 @@ function VariantesManager({ productoId }: { productoId: number }) {
           />
         </div>
         <Button type="submit" size="sm" disabled={crearVariante.isPending}>
-          Agregar
+          <Plus className="size-3.5" />
+          Agregar variante
         </Button>
       </form>
-    </div>
+    </SeccionModal>
   );
 }
 
@@ -499,10 +743,12 @@ function FilaVariante({
   variante,
   onGuardar,
   onEliminar,
+  onImprimir,
 }: {
   variante: Variante;
   onGuardar: (input: { color?: string; talle?: string; stock?: number }) => Promise<unknown>;
   onEliminar: () => void;
+  onImprimir: () => void;
 }) {
   const [form, setForm] = useState({
     color: variante.color ?? "",
@@ -551,12 +797,34 @@ function FilaVariante({
         />
       </TableCell>
       <TableCell className="text-right">
-        <div className="flex justify-end gap-2">
-          <Button variant="outline" size="sm" onClick={handleGuardar} disabled={guardando}>
-            Guardar
+        <div className="flex justify-end gap-1">
+          <Button
+            variant="outline"
+            size="icon-sm"
+            onClick={handleGuardar}
+            disabled={guardando}
+            title="Guardar cambios"
+            aria-label="Guardar cambios de la variante"
+          >
+            <Save />
           </Button>
-          <Button variant="destructive" size="sm" onClick={onEliminar}>
-            Eliminar
+          <Button
+            variant="outline"
+            size="icon-sm"
+            onClick={onImprimir}
+            title="Imprimir etiqueta"
+            aria-label="Imprimir etiqueta de la variante"
+          >
+            <Printer />
+          </Button>
+          <Button
+            variant="destructive"
+            size="icon-sm"
+            onClick={onEliminar}
+            title="Eliminar variante"
+            aria-label="Eliminar variante"
+          >
+            <Trash2 />
           </Button>
         </div>
       </TableCell>

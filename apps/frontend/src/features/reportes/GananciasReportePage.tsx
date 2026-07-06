@@ -3,7 +3,7 @@ import { toast } from "sonner";
 import { EstadoConsulta } from "./components/EstadoConsulta";
 import { ExportarBotones } from "./components/ExportarBotones";
 import { KpiCard } from "./components/KpiCard";
-import { RangoFechasPicker, rangoUltimosDias, type RangoFechasValor } from "./components/RangoFechasPicker";
+import { RangoFechasPicker, rangoQueryParams, rangoUltimosDias, type RangoFechasValor } from "./components/RangoFechasPicker";
 import { type ColumnaTabla, TablaOrdenable } from "./components/TablaOrdenable";
 import { descargarExportacion, useReporteGanancias, type GananciaProducto } from "./reportes.api";
 import { formatearMoneda } from "@/lib/utils";
@@ -50,8 +50,7 @@ export function GananciasReportePage() {
   const [exportando, setExportando] = useState(false);
 
   const filtros = {
-    desde: rango.desde,
-    hasta: rango.hasta,
+    ...rangoQueryParams(rango),
     busqueda: busqueda || undefined,
     pagina,
     porPagina: 20,
@@ -75,7 +74,7 @@ export function GananciasReportePage() {
     try {
       await descargarExportacion(
         `/reportes/ganancias/exportar.${formato}`,
-        { desde: rango.desde, hasta: rango.hasta, busqueda: busqueda || undefined },
+        { ...rangoQueryParams(rango), busqueda: busqueda || undefined },
         `reporte-ganancias.${formato}`,
       );
     } catch (err) {

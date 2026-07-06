@@ -10,6 +10,10 @@ export const MEDIOS_PAGO = {
   TRANSFERENCIA: "TRANSFERENCIA",
   MERCADO_PAGO: "MERCADO_PAGO",
   QR: "QR",
+  // Saldo a favor del cliente en su cuenta corriente (generado por una nota
+  // de crédito de devolución). No es un medio de pago externo: se descuenta
+  // de MovimientoCuentaCorriente, no mueve efectivo de caja.
+  SALDO_A_FAVOR: "SALDO_A_FAVOR",
 } as const;
 export type MedioPagoNombre = (typeof MEDIOS_PAGO)[keyof typeof MEDIOS_PAGO];
 

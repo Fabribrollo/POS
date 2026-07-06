@@ -3,7 +3,7 @@ import { MEDIOS_PAGO, TIPO_MOVIMIENTO_STOCK } from "@pos/shared";
 import { prisma } from "../../core/prisma.js";
 import { BusinessRuleError, NotFoundError } from "../../core/errors/AppError.js";
 import * as cajaService from "../caja/caja.service.js";
-import { buscarCliente } from "../clientes/clientes.service.js";
+import { buscarCliente, registrarMovimientoCCTx, saldoCCTx } from "../clientes/clientes.service.js";
 import { aplicarMovimientoStockTx, resolverDepositoId, validarProductoYVariante } from "../stock/stock.service.js";
 import * as ventasRepository from "./ventas.repository.js";
 
@@ -25,6 +25,26 @@ export async function crearVenta(input: CrearVentaInput, usuarioId: number) {
 
   if (input.clienteId) {
     await buscarCliente(input.clienteId);
+  }
+
+  // El saldo a favor sale de la cuenta corriente del cliente (una nota de
+  // crédito de una devolución previa), no de un medio de pago externo.
+  const montoSaldoUsado = redondear(
+    input.pagos
+      .filter((p) => p.medioPago === MEDIOS_PAGO.SALDO_A_FAVOR)
+      .reduce((acc, p) => acc + p.monto, 0),
+  );
+  if (montoSaldoUsado > 0) {
+    if (!input.clienteId) {
+      throw new BusinessRuleError("Para usar saldo a favor la venta debe tener un cliente asociado");
+    }
+    const saldo = await saldoCCTx(prisma, input.clienteId);
+    const creditoDisponible = saldo < 0 ? -saldo : 0;
+    if (montoSaldoUsado > creditoDisponible + TOLERANCIA_CENTAVOS) {
+      throw new BusinessRuleError(
+        `El cliente no tiene suficiente saldo a favor (disponible: $${creditoDisponible})`,
+      );
+    }
   }
 
   // Validar existencia de cada producto/variante antes de tocar la DB en
@@ -101,6 +121,10 @@ export async function crearVenta(input: CrearVentaInput, usuarioId: number) {
     const efectivo = redondear(totalEfectivo(input.pagos));
     if (efectivo > 0) {
       await cajaService.registrarMovimientoVenta(tx, caja.id, efectivo, ventaCreada.id, usuarioId);
+    }
+
+    if (montoSaldoUsado > 0) {
+      await registrarMovimientoCCTx(tx, input.clienteId!, "DEBITO", montoSaldoUsado, ventaCreada.id);
     }
 
     return ventaCreada;

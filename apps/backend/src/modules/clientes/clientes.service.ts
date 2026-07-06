@@ -3,8 +3,12 @@ import type {
   CrearClienteInput,
   MovimientoCuentaCorrienteInput,
 } from "@pos/shared";
+import type { Prisma, PrismaClient } from "../../../generated/prisma/index.js";
+import { prisma } from "../../core/prisma.js";
 import { BusinessRuleError, NotFoundError } from "../../core/errors/AppError.js";
 import * as clientesRepository from "./clientes.repository.js";
+
+type Db = PrismaClient | Prisma.TransactionClient;
 
 export function listarClientes() {
   return clientesRepository.listar();
@@ -43,8 +47,7 @@ export async function historialCompras(clienteId: number) {
 
 export async function obtenerSaldoCC(clienteId: number) {
   await buscarCliente(clienteId);
-  const ultimo = await clientesRepository.ultimoMovimientoCC(clienteId);
-  return { saldo: ultimo ? Number(ultimo.saldoNuevo) : 0 };
+  return { saldo: await saldoCCTx(prisma, clienteId) };
 }
 
 export async function listarMovimientosCC(clienteId: number) {
@@ -52,16 +55,43 @@ export async function listarMovimientosCC(clienteId: number) {
   return clientesRepository.listarMovimientosCC(clienteId);
 }
 
-// DEBITO: el cliente compra a cuenta y su deuda aumenta.
-// CREDITO: el cliente paga (total o parcial) y su deuda disminuye.
+// Saldo positivo = el cliente debe dinero (cuenta corriente clásica).
+// Saldo negativo = el cliente tiene crédito a favor (p.ej. por una devolución).
+export async function saldoCCTx(db: Db, clienteId: number): Promise<number> {
+  const ultimo = await clientesRepository.ultimoMovimientoCC(db, clienteId);
+  return ultimo ? Number(ultimo.saldoNuevo) : 0;
+}
+
+// DEBITO: el cliente compra a cuenta (o gasta su saldo a favor) y su deuda
+// aumenta (o su crédito disminuye). CREDITO: se le acredita saldo (paga una
+// deuda, o se le emite una nota de crédito) y su deuda disminuye.
+export async function registrarMovimientoCCTx(
+  db: Db,
+  clienteId: number,
+  tipo: "DEBITO" | "CREDITO",
+  monto: number,
+  ventaId?: number,
+) {
+  const saldoAnterior = await saldoCCTx(db, clienteId);
+  const saldoNuevo = tipo === "DEBITO" ? saldoAnterior + monto : saldoAnterior - monto;
+  return clientesRepository.crearMovimientoCC(db, {
+    clienteId,
+    tipo,
+    monto,
+    saldoAnterior,
+    saldoNuevo,
+    ventaId,
+  });
+}
+
 export async function registrarMovimientoCC(
   clienteId: number,
   input: MovimientoCuentaCorrienteInput,
 ) {
   const cliente = await buscarCliente(clienteId);
-  const ultimo = await clientesRepository.ultimoMovimientoCC(clienteId);
-  const saldoAnterior = ultimo ? Number(ultimo.saldoNuevo) : 0;
-  const saldoNuevo = input.tipo === "DEBITO" ? saldoAnterior + input.monto : saldoAnterior - input.monto;
+  const saldoAnterior = await saldoCCTx(prisma, clienteId);
+  const saldoNuevo =
+    input.tipo === "DEBITO" ? saldoAnterior + input.monto : saldoAnterior - input.monto;
 
   if (
     input.tipo === "DEBITO" &&
@@ -73,7 +103,7 @@ export async function registrarMovimientoCC(
     );
   }
 
-  return clientesRepository.crearMovimientoCC({
+  return clientesRepository.crearMovimientoCC(prisma, {
     clienteId,
     tipo: input.tipo,
     monto: input.monto,

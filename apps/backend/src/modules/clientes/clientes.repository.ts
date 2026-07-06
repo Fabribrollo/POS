@@ -1,4 +1,7 @@
+import type { Prisma, PrismaClient } from "../../../generated/prisma/index.js";
 import { prisma } from "../../core/prisma.js";
+
+type Db = PrismaClient | Prisma.TransactionClient;
 
 export function listar() {
   return prisma.cliente.findMany({ where: { activo: true }, orderBy: { nombre: "asc" } });
@@ -30,27 +33,33 @@ export function actualizar(id: number, data: Record<string, unknown>) {
 export function historialCompras(clienteId: number) {
   return prisma.venta.findMany({
     where: { clienteId, estado: "COMPLETADA" },
-    include: { items: true, pagos: { include: { medioPago: true } } },
+    include: {
+      items: { include: { producto: true, variante: true } },
+      pagos: { include: { medioPago: true } },
+    },
     orderBy: { createdAt: "desc" },
   });
 }
 
-export function ultimoMovimientoCC(clienteId: number) {
-  return prisma.movimientoCuentaCorriente.findFirst({
+export function ultimoMovimientoCC(db: Db, clienteId: number) {
+  return db.movimientoCuentaCorriente.findFirst({
     where: { clienteId },
     orderBy: { createdAt: "desc" },
   });
 }
 
-export function crearMovimientoCC(data: {
-  clienteId: number;
-  tipo: string;
-  monto: number;
-  saldoAnterior: number;
-  saldoNuevo: number;
-  ventaId?: number;
-}) {
-  return prisma.movimientoCuentaCorriente.create({ data });
+export function crearMovimientoCC(
+  db: Db,
+  data: {
+    clienteId: number;
+    tipo: string;
+    monto: number;
+    saldoAnterior: number;
+    saldoNuevo: number;
+    ventaId?: number;
+  },
+) {
+  return db.movimientoCuentaCorriente.create({ data });
 }
 
 export function listarMovimientosCC(clienteId: number) {

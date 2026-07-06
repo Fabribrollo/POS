@@ -10,6 +10,7 @@ import { devolucionesRouter } from "./modules/devoluciones/devoluciones.routes.j
 import { healthRouter } from "./modules/health/health.routes.js";
 import { listasPrecioRouter } from "./modules/listas-precio/listasPrecio.routes.js";
 import { marcasRouter } from "./modules/marcas/marcas.routes.js";
+import { negocioRouter } from "./modules/negocio/negocio.routes.js";
 import { productosRouter } from "./modules/productos/productos.routes.js";
 import { proveedoresRouter } from "./modules/proveedores/proveedores.routes.js";
 import { reportesRouter } from "./modules/reportes/reportes.routes.js";
@@ -44,6 +45,7 @@ export function createServer(): Express {
   app.use("/api/proveedores", proveedoresRouter);
   app.use("/api/compras", comprasRouter);
   app.use("/api/reportes", reportesRouter);
+  app.use("/api/negocio", negocioRouter);
 
   app.use(errorHandler);
 

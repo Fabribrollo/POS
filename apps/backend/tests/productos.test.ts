@@ -98,6 +98,43 @@ describe("productos", () => {
     expect(productoActualizado.body.stockTotal).toBe(25);
   });
 
+  it("el filtro de estado excluye/incluye productos inactivos y reactivar los devuelve al listado", async () => {
+    const producto = await request(app)
+      .post("/api/productos")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ nombre: "Para desactivar", precioCosto: 100, precioVenta: 200, stockMinimo: 0 });
+
+    await request(app)
+      .delete(`/api/productos/${producto.body.id}`)
+      .set("Authorization", `Bearer ${token}`);
+
+    const activos = await request(app)
+      .get("/api/productos")
+      .set("Authorization", `Bearer ${token}`);
+    expect(activos.body.some((p: { id: number }) => p.id === producto.body.id)).toBe(false);
+
+    const inactivos = await request(app)
+      .get("/api/productos")
+      .query({ estado: "inactivos" })
+      .set("Authorization", `Bearer ${token}`);
+    expect(inactivos.body.some((p: { id: number }) => p.id === producto.body.id)).toBe(true);
+
+    const todos = await request(app)
+      .get("/api/productos")
+      .query({ estado: "todos" })
+      .set("Authorization", `Bearer ${token}`);
+    expect(todos.body.some((p: { id: number }) => p.id === producto.body.id)).toBe(true);
+
+    await request(app)
+      .post(`/api/productos/${producto.body.id}/reactivar`)
+      .set("Authorization", `Bearer ${token}`);
+
+    const activosDespues = await request(app)
+      .get("/api/productos")
+      .set("Authorization", `Bearer ${token}`);
+    expect(activosDespues.body.some((p: { id: number }) => p.id === producto.body.id)).toBe(true);
+  });
+
   it("el escaneo resuelve directo a la variante por su propio código, y con una sola variante también resuelve directo", async () => {
     const producto = await request(app)
       .post("/api/productos")

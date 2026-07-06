@@ -39,9 +39,10 @@ function conStockTotal<
   };
 }
 
-export async function listar() {
+export async function listar(estado: "activos" | "inactivos" | "todos" = "activos") {
+  const where = estado === "todos" ? {} : { activo: estado === "activos" };
   const productos = await prisma.producto.findMany({
-    where: { activo: true },
+    where,
     include: includeCatalogo,
     orderBy: { nombre: "asc" },
   });

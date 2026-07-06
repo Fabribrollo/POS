@@ -24,6 +24,7 @@ interface TablaOrdenableProps<T> {
   claveFila: (fila: T) => string | number;
   orden?: { columna?: string; direccion: "asc" | "desc" };
   onOrdenar?: (columna: string) => void;
+  onFilaClick?: (fila: T) => void;
   paginacion?: {
     pagina: number;
     totalPaginas: number;
@@ -45,6 +46,7 @@ export function TablaOrdenable<T>({
   claveFila,
   orden,
   onOrdenar,
+  onFilaClick,
   paginacion,
   busqueda,
 }: TablaOrdenableProps<T>) {
@@ -84,7 +86,11 @@ export function TablaOrdenable<T>({
           </TableHeader>
           <TableBody>
             {filas.map((fila) => (
-              <TableRow key={claveFila(fila)}>
+              <TableRow
+                key={claveFila(fila)}
+                onClick={() => onFilaClick?.(fila)}
+                className={onFilaClick ? "cursor-pointer hover:bg-muted/50" : undefined}
+              >
                 {columnas.map((col) => (
                   <TableCell key={col.key} className={col.align === "right" ? "text-right" : undefined}>
                     {col.render(fila)}

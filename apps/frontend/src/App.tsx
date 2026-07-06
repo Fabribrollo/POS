@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { LoginPage } from "@/features/auth/LoginPage";
 import { CajaPage } from "@/features/caja/CajaPage";
 import { CajaReportePage } from "@/features/caja/CajaReportePage";
+import { DevolucionesPage } from "@/features/devoluciones/DevolucionesPage";
 import { ProductosPage } from "@/features/productos/ProductosPage";
 import { CajerosReportePage } from "@/features/reportes/CajerosReportePage";
 import { ClientesReportePage } from "@/features/reportes/ClientesReportePage";
@@ -44,6 +45,7 @@ function App() {
         <Route path="/ventas" element={<VentaPage />} />
         <Route path="/productos" element={<ProductosPage />} />
         <Route path="/caja" element={<CajaPage />} />
+        <Route path="/devoluciones" element={<DevolucionesPage />} />
         <Route path="/reportes" element={<ReportesPage />}>
           <Route index element={<DashboardPage />} />
           <Route path="ventas" element={<VentasReportePage />} />
