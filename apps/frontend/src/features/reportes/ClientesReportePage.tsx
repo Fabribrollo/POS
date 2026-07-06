@@ -2,9 +2,17 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { EstadoConsulta } from "./components/EstadoConsulta";
 import { ExportarBotones } from "./components/ExportarBotones";
-import { RangoFechasPicker, rangoUltimosDias, type RangoFechasValor } from "./components/RangoFechasPicker";
+import { RangoFechasPicker, rangoQueryParams, rangoUltimosDias, type RangoFechasValor } from "./components/RangoFechasPicker";
 import { type ColumnaTabla, TablaOrdenable } from "./components/TablaOrdenable";
 import { descargarExportacion, useReporteClientes, type ClienteReporte } from "./reportes.api";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Separator } from "@/components/ui/separator";
+import { useHistorialCompras } from "@/features/clientes/clientes.api";
 import { formatearMoneda } from "@/lib/utils";
 import { extraerMensajeError } from "@/shared/api/client";
 
@@ -43,10 +51,12 @@ export function ClientesReportePage() {
     direccion: "asc",
   });
   const [exportando, setExportando] = useState(false);
+  const [clienteSeleccionado, setClienteSeleccionado] = useState<ClienteReporte | null>(null);
+
+  const historial = useHistorialCompras(clienteSeleccionado?.id ?? null);
 
   const filtros = {
-    desde: rango.desde,
-    hasta: rango.hasta,
+    ...rangoQueryParams(rango),
     busqueda: busqueda || undefined,
     pagina,
     porPagina: 20,
@@ -70,7 +80,7 @@ export function ClientesReportePage() {
     try {
       await descargarExportacion(
         `/reportes/clientes/exportar.${formato}`,
-        { desde: rango.desde, hasta: rango.hasta, busqueda: busqueda || undefined },
+        { ...rangoQueryParams(rango), busqueda: busqueda || undefined },
         `reporte-clientes.${formato}`,
       );
     } catch (err) {
@@ -116,6 +126,7 @@ export function ClientesReportePage() {
           claveFila={(c) => c.id}
           orden={orden}
           onOrdenar={ordenarPor}
+          onFilaClick={setClienteSeleccionado}
           busqueda={{
             valor: busqueda,
             onCambiar: (v) => {
@@ -131,6 +142,54 @@ export function ClientesReportePage() {
           }}
         />
       </EstadoConsulta>
+
+      <Dialog open={clienteSeleccionado != null} onOpenChange={(v) => !v && setClienteSeleccionado(null)}>
+        <DialogContent className="max-h-[80vh] max-w-2xl overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Compras de {clienteSeleccionado?.nombre}</DialogTitle>
+          </DialogHeader>
+
+          {historial.isLoading && <p className="text-sm text-muted-foreground">Cargando...</p>}
+          {historial.error && (
+            <p className="text-sm text-destructive">{extraerMensajeError(historial.error)}</p>
+          )}
+          {historial.data && historial.data.length === 0 && (
+            <p className="text-sm text-muted-foreground">Este cliente todavía no tiene compras registradas.</p>
+          )}
+          {historial.data && historial.data.length > 0 && (
+            <div className="space-y-4">
+              {historial.data.map((compra) => (
+                <div key={compra.id} className="space-y-2">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="font-medium">Venta {compra.numero}</span>
+                    <span className="text-muted-foreground">
+                      {new Date(compra.createdAt).toLocaleString("es-AR")}
+                    </span>
+                  </div>
+                  <ul className="space-y-1 text-sm text-muted-foreground">
+                    {compra.items.map((item) => (
+                      <li key={item.id} className="flex justify-between">
+                        <span>
+                          {item.cantidad} x {item.producto.nombre}
+                          {item.variante ? ` (${item.variante.nombre})` : ""}
+                        </span>
+                        <span>${formatearMoneda(item.subtotal)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">
+                      {compra.pagos.map((p) => p.medioPago.nombre).join(", ")}
+                    </span>
+                    <span className="font-semibold">${formatearMoneda(compra.total)}</span>
+                  </div>
+                  <Separator />
+                </div>
+              ))}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

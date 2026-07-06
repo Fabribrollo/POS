@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 import type { AnularVentaInput, CrearVentaInput } from "@pos/shared";
+import { tienePermiso } from "@pos/shared";
 import { parseId } from "../../core/utils/parseId.js";
 import * as ventasService from "./ventas.service.js";
 
@@ -13,8 +14,18 @@ export async function buscarController(req: Request, res: Response): Promise<voi
 }
 
 export async function listarController(req: Request, res: Response): Promise<void> {
-  const usuarioId = req.query.usuarioId ? Number(req.query.usuarioId) : undefined;
   const estado = typeof req.query.estado === "string" ? req.query.estado : undefined;
+
+  // Sin REPORTES_VER (p.ej. un vendedor) no se puede ver el listado completo
+  // de ventas de todo el local: se fuerza a las propias, sin importar qué
+  // usuarioId se haya pedido en la query.
+  const puedeVerTodas = tienePermiso(req.usuario!.rol, "REPORTES_VER");
+  const usuarioId = puedeVerTodas
+    ? req.query.usuarioId
+      ? Number(req.query.usuarioId)
+      : undefined
+    : req.usuario!.id;
+
   res.json(await ventasService.listarVentas({ usuarioId, estado }));
 }
 

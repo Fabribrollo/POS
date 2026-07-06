@@ -30,7 +30,8 @@ import { formatearMoneda } from "@/lib/utils";
 import { extraerMensajeError } from "@/shared/api/client";
 import { useCarritoStore } from "@/shared/stores/carrito.store";
 import type { Producto } from "../productos/productos.api";
-import { escanearCodigo, useCajaAbierta, useCrearVenta } from "./ventas.api";
+import { imprimirTicket } from "./ticket";
+import { escanearCodigo, useCajaAbierta, useCrearVenta, useNegocio } from "./ventas.api";
 
 const MEDIOS_PAGO = ["EFECTIVO", "DEBITO", "CREDITO", "TRANSFERENCIA", "MERCADO_PAGO", "QR"] as const;
 
@@ -52,16 +53,16 @@ export function VentaPage() {
   const { data: caja, isLoading: cargandoCaja } = useCajaAbierta();
   const { items, agregar, quitar, setCantidad, setDescuentoPorcentaje, limpiar } = useCarritoStore();
   const [codigo, setCodigo] = useState("");
-  const [descuentoTotal, setDescuentoTotal] = useState("0");
   const [pagos, setPagos] = useState<PagoForm[]>([{ medioPago: "EFECTIVO", monto: "" }]);
   const [productoParaElegir, setProductoParaElegir] = useState<Producto | null>(null);
   const crearVenta = useCrearVenta();
+  const { data: negocio } = useNegocio();
 
   const subtotal = items.reduce(
     (acc, i) => acc + i.cantidad * i.precioUnitario - descuentoLinea(i),
     0,
   );
-  const total = Math.max(0, subtotal - Number(descuentoTotal || 0));
+  const total = subtotal;
   const totalPagos = pagos.reduce((acc, p) => acc + Number(p.monto || 0), 0);
 
   function agregarAlCarrito(
@@ -133,7 +134,7 @@ export function VentaPage() {
       return;
     }
     try {
-      await crearVenta.mutateAsync({
+      const venta = await crearVenta.mutateAsync({
         items: items.map((i) => ({
           productoId: i.productoId,
           varianteId: i.varianteId,
@@ -141,15 +142,19 @@ export function VentaPage() {
           precioUnitario: i.precioUnitario,
           descuento: descuentoLinea(i),
         })),
-        descuentoTotal: Number(descuentoTotal || 0),
+        descuentoTotal: 0,
         pagos: pagos
           .filter((p) => Number(p.monto) > 0)
           .map((p) => ({ medioPago: p.medioPago, monto: Number(p.monto), recargo: 0 })),
       });
       toast.success("Venta registrada");
       limpiar();
-      setDescuentoTotal("0");
       setPagos([{ medioPago: "EFECTIVO", monto: "" }]);
+      try {
+        imprimirTicket(venta, negocio ?? { nombre: "Comprobante de venta", direccion: "", cuit: "" });
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "No se pudo imprimir el ticket");
+      }
     } catch (err) {
       toast.error(extraerMensajeError(err));
     }
@@ -269,15 +274,6 @@ export function VentaPage() {
             <div className="flex justify-between">
               <span>Subtotal</span>
               <span>${formatearMoneda(subtotal)}</span>
-            </div>
-            <div className="flex items-center justify-between gap-2">
-              <span>Descuento</span>
-              <Input
-                type="number"
-                className="w-24 text-right"
-                value={descuentoTotal}
-                onChange={(e) => setDescuentoTotal(e.target.value)}
-              />
             </div>
             <div className="flex justify-between font-semibold">
               <span>Total</span>

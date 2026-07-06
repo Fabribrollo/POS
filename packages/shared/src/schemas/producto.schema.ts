@@ -25,3 +25,8 @@ export const importarProductosSchema = z.object({
   archivoBase64: z.string().min(1, "El archivo está vacío"),
 });
 export type ImportarProductosInput = z.infer<typeof importarProductosSchema>;
+
+export const listarProductosQuerySchema = z.object({
+  estado: z.enum(["activos", "inactivos", "todos"]).default("activos"),
+});
+export type ListarProductosQuery = z.infer<typeof listarProductosQuerySchema>;

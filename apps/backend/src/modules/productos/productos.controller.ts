@@ -5,21 +5,43 @@ import type {
   CrearProductoInput,
   CrearVarianteInput,
   ImportarProductosInput,
+  ListarProductosQuery,
 } from "@pos/shared";
+import { tienePermiso } from "@pos/shared";
 import { parseId } from "../../core/utils/parseId.js";
 import { generarPlantillaXlsx } from "./productos.plantilla.js";
 import * as productosService from "./productos.service.js";
 
-export async function listarController(_req: Request, res: Response): Promise<void> {
-  res.json(await productosService.listarProductos());
+// El costo/margen es información de dueño o encargado: quien solo puede leer
+// productos (un vendedor, p.ej.) no debería verlo en la respuesta cruda de la
+// API aunque el frontend no lo muestre en pantalla.
+function puedeVerCosto(req: Request): boolean {
+  return tienePermiso(req.usuario!.rol, "PRODUCTOS_ESCRIBIR");
+}
+
+function sinCosto<T extends { precioCosto: unknown }>(producto: T): Omit<T, "precioCosto"> {
+  const { precioCosto: _precioCosto, ...resto } = producto;
+  return resto;
+}
+
+export async function listarController(req: Request, res: Response): Promise<void> {
+  const { estado } = req.queryValidado as ListarProductosQuery;
+  const productos = await productosService.listarProductos(estado);
+  res.json(puedeVerCosto(req) ? productos : productos.map(sinCosto));
 }
 
 export async function buscarPorIdController(req: Request, res: Response): Promise<void> {
-  res.json(await productosService.buscarProducto(parseId(req.params.id)));
+  const producto = await productosService.buscarProducto(parseId(req.params.id));
+  res.json(puedeVerCosto(req) ? producto : sinCosto(producto));
 }
 
 export async function buscarPorCodigoController(req: Request, res: Response): Promise<void> {
-  res.json(await productosService.escanearCodigo(req.params.codigo));
+  const resultado = await productosService.escanearCodigo(req.params.codigo);
+  if (puedeVerCosto(req)) {
+    res.json(resultado);
+    return;
+  }
+  res.json({ ...resultado, producto: sinCosto(resultado.producto) });
 }
 
 export async function crearController(req: Request, res: Response): Promise<void> {
@@ -34,6 +56,10 @@ export async function actualizarController(req: Request, res: Response): Promise
 
 export async function desactivarController(req: Request, res: Response): Promise<void> {
   res.json(await productosService.desactivarProducto(parseId(req.params.id)));
+}
+
+export async function reactivarController(req: Request, res: Response): Promise<void> {
+  res.json(await productosService.reactivarProducto(parseId(req.params.id)));
 }
 
 export async function importarController(req: Request, res: Response): Promise<void> {

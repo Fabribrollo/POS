@@ -7,6 +7,20 @@ export function buscarVentaConItems(id: number) {
   return prisma.venta.findUnique({ where: { id }, include: { items: true } });
 }
 
+export function buscarVentaPorNumero(numero: string) {
+  return prisma.venta.findUnique({
+    where: { numero },
+    include: {
+      cliente: true,
+      items: { include: { producto: true, variante: true } },
+    },
+  });
+}
+
+export function asignarClienteAVenta(db: Db, ventaId: number, clienteId: number) {
+  return db.venta.update({ where: { id: ventaId }, data: { clienteId } });
+}
+
 export function sumaDevueltaPorItem(itemVentaId: number) {
   return prisma.itemDevolucion.aggregate({
     where: { itemVentaId },

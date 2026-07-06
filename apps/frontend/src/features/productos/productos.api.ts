@@ -15,6 +15,8 @@ export interface Marca {
   id: number;
   nombre: string;
 }
+export type EstadoProducto = "activos" | "inactivos" | "todos";
+
 export interface Producto {
   id: number;
   nombre: string;
@@ -25,6 +27,9 @@ export interface Producto {
   // Suma del stock de todas las variantes del producto; no es un campo
   // editable, se calcula en el backend a partir de los movimientos de stock.
   stockTotal: number;
+  // Umbral para el filtro "stock bajo" (stockTotal <= stockMinimo).
+  stockMinimo: number;
+  activo: boolean;
   categoria: Categoria | null;
   marca: Marca | null;
   variantes?: Variante[];
@@ -59,10 +64,10 @@ function archivoABase64(archivo: File): Promise<string> {
   });
 }
 
-export function useProductos() {
+export function useProductos(estado: EstadoProducto = "activos") {
   return useQuery({
-    queryKey: ["productos"],
-    queryFn: async () => (await api.get<Producto[]>("/productos")).data,
+    queryKey: ["productos", estado],
+    queryFn: async () => (await api.get<Producto[]>("/productos", { params: { estado } })).data,
   });
 }
 
@@ -88,6 +93,14 @@ export function useDesactivarProducto() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (id: number) => (await api.delete(`/productos/${id}`)).data,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["productos"] }),
+  });
+}
+
+export function useReactivarProducto() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: number) => (await api.post<Producto>(`/productos/${id}/reactivar`)).data,
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["productos"] }),
   });
 }

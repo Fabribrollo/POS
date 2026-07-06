@@ -19,3 +19,7 @@ export async function listarPorVentaController(req: Request, res: Response): Pro
   const ventaOriginalId = parseId(req.params.ventaId);
   res.json(await devolucionesService.listarPorVenta(ventaOriginalId));
 }
+
+export async function buscarPorNumeroController(req: Request, res: Response): Promise<void> {
+  res.json(await devolucionesService.buscarVentaParaDevolucion(req.params.numero));
+}

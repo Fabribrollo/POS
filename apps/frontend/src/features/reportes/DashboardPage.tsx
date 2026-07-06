@@ -5,7 +5,7 @@ import { DollarSign, Receipt, ShoppingCart, TrendingUp, Wallet } from "lucide-re
 import { EstadoConsulta } from "./components/EstadoConsulta";
 import { ExportarBotones } from "./components/ExportarBotones";
 import { KpiCard } from "./components/KpiCard";
-import { RangoFechasPicker, rangoUltimosDias, type RangoFechasValor } from "./components/RangoFechasPicker";
+import { RangoFechasPicker, rangoQueryParams, rangoUltimosDias, type RangoFechasValor } from "./components/RangoFechasPicker";
 import { type ColumnaTabla, TablaOrdenable } from "./components/TablaOrdenable";
 import { descargarExportacion, useDashboard, type ProductoTop } from "./reportes.api";
 import { formatearMoneda } from "@/lib/utils";
@@ -39,7 +39,7 @@ export function DashboardPage() {
     try {
       await descargarExportacion(
         `/reportes/dashboard/exportar.${formato}`,
-        { desde: rango.desde, hasta: rango.hasta },
+        { ...rangoQueryParams(rango) },
         `dashboard.${formato}`,
       );
     } catch (err) {

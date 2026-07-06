@@ -3,6 +3,7 @@ import type {
   ActualizarVarianteInput,
   CrearProductoInput,
   CrearVarianteInput,
+  ListarProductosQuery,
 } from "@pos/shared";
 import { TIPO_MOVIMIENTO_STOCK } from "@pos/shared";
 import { prisma } from "../../core/prisma.js";
@@ -25,8 +26,8 @@ async function validarCategoriaYMarca(categoriaId?: number, marcaId?: number): P
   }
 }
 
-export function listarProductos() {
-  return productosRepository.listar();
+export function listarProductos(estado: ListarProductosQuery["estado"]) {
+  return productosRepository.listar(estado);
 }
 
 export async function buscarProducto(id: number) {
@@ -79,6 +80,11 @@ export async function actualizarProducto(id: number, input: ActualizarProductoIn
 export async function desactivarProducto(id: number) {
   await buscarProducto(id);
   return productosRepository.actualizar(id, { activo: false });
+}
+
+export async function reactivarProducto(id: number) {
+  await buscarProducto(id);
+  return productosRepository.actualizar(id, { activo: true });
 }
 
 // El usuario solo carga color, talle y stock inicial: nombre, sku, código de

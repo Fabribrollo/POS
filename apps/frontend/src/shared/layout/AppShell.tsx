@@ -1,5 +1,5 @@
 import { tienePermiso } from "@pos/shared";
-import { LogOut, LayoutGrid, Package, ShoppingCart, Wallet } from "lucide-react";
+import { LogOut, LayoutGrid, Package, RotateCcw, ShoppingCart, Wallet } from "lucide-react";
 import { NavLink, Outlet } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { useAuthStore } from "@/shared/stores/auth.store";
@@ -8,6 +8,7 @@ const links = [
   { to: "/ventas", label: "Punto de venta", icon: ShoppingCart, permiso: "VENTAS_CREAR" as const },
   { to: "/productos", label: "Productos", icon: Package, permiso: "PRODUCTOS_LEER" as const },
   { to: "/caja", label: "Caja", icon: Wallet, permiso: "CAJA_ABRIR_CERRAR" as const },
+  { to: "/devoluciones", label: "Devoluciones", icon: RotateCcw, permiso: "DEVOLUCIONES_CREAR" as const },
   { to: "/reportes", label: "Reportes", icon: LayoutGrid, permiso: "REPORTES_VER" as const },
 ];
 
@@ -18,8 +19,8 @@ export function AppShell() {
   if (!usuario) return null;
 
   return (
-    <div className="flex min-h-svh">
-      <aside className="flex w-56 shrink-0 flex-col border-r bg-sidebar p-4">
+    <div className="flex h-svh">
+      <aside className="flex h-full w-56 shrink-0 flex-col overflow-y-auto border-r bg-sidebar p-4">
         <div className="mb-6 px-2">
           <p className="text-sm font-semibold text-sidebar-foreground">POS Indumentaria</p>
           <p className="text-xs text-muted-foreground">

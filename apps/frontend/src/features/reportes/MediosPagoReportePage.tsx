@@ -2,7 +2,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { EstadoConsulta } from "./components/EstadoConsulta";
 import { ExportarBotones } from "./components/ExportarBotones";
-import { RangoFechasPicker, rangoUltimosDias, type RangoFechasValor } from "./components/RangoFechasPicker";
+import { RangoFechasPicker, rangoQueryParams, rangoUltimosDias, type RangoFechasValor } from "./components/RangoFechasPicker";
 import { type ColumnaTabla, TablaOrdenable } from "./components/TablaOrdenable";
 import { descargarExportacion, useReporteMediosPago, type MedioPagoReporte } from "./reportes.api";
 import { formatearMoneda } from "@/lib/utils";
@@ -42,8 +42,7 @@ export function MediosPagoReportePage() {
   const [exportando, setExportando] = useState(false);
 
   const filtros = {
-    desde: rango.desde,
-    hasta: rango.hasta,
+    ...rangoQueryParams(rango),
     pagina: 1,
     porPagina: 50,
     ordenarPor: orden.columna,
@@ -65,7 +64,7 @@ export function MediosPagoReportePage() {
     try {
       await descargarExportacion(
         `/reportes/medios-pago/exportar.${formato}`,
-        { desde: rango.desde, hasta: rango.hasta },
+        { ...rangoQueryParams(rango) },
         `reporte-medios-pago.${formato}`,
       );
     } catch (err) {
