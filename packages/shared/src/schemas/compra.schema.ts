@@ -4,7 +4,7 @@ export const itemCompraSchema = z.object({
   productoId: z.number().int().positive(),
   varianteId: z.number().int().positive().optional(),
   cantidad: z.number().int().positive(),
-  precioUnitario: z.number().nonnegative(),
+  precioUnitario: z.number().positive(),
 });
 
 export const crearCompraSchema = z.object({

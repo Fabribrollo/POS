@@ -25,6 +25,10 @@ export const PERMISOS = {
   COMPRAS_GESTIONAR: [ROLES.ADMINISTRADOR, ROLES.ENCARGADO],
   REPORTES_VER: [ROLES.ADMINISTRADOR, ROLES.ENCARGADO],
   USUARIOS_ADMINISTRAR: [ROLES.ADMINISTRADOR],
+  // Deliberadamente más restrictivo que REPORTES_VER: el registro de
+  // auditoría puede incluir acciones del propio Encargado, así que solo el
+  // Administrador debe poder revisarlo.
+  AUDITORIA_VER: [ROLES.ADMINISTRADOR],
 } as const satisfies Record<string, readonly RolNombre[]>;
 
 export type Permiso = keyof typeof PERMISOS;

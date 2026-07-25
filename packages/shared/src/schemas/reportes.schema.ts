@@ -1,14 +1,17 @@
 import { z } from "zod";
 
-function rangoValido(d: { desde?: Date; hasta?: Date }): boolean {
+// Exportadas para que otros schemas de query "de listado" (ej. auditoria.schema.ts)
+// puedan construir su propio .extend().refine() con la misma validación de
+// rango, sin duplicar esta lógica.
+export function rangoValido(d: { desde?: Date; hasta?: Date }): boolean {
   return !d.desde || !d.hasta || d.desde <= d.hasta;
 }
 
-function mensajeRangoInvalido() {
+export function mensajeRangoInvalido() {
   return { message: "La fecha 'desde' no puede ser posterior a 'hasta'", path: ["desde"] };
 }
 
-const rangoFechasBase = z.object({
+export const rangoFechasBase = z.object({
   desde: z.coerce.date().optional(),
   hasta: z.coerce.date().optional(),
 });

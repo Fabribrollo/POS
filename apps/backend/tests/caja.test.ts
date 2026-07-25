@@ -75,4 +75,21 @@ describe("caja", () => {
       .send({ tipo: "INGRESO", monto: 100, concepto: "x" });
     expect(res.status).toBe(404);
   });
+
+  it("dos aperturas casi simultáneas: solo una gana, la otra falla con 422 (no 500)", async () => {
+    await cerrarSiHayAbierta(app, token);
+
+    const [primera, segunda] = await Promise.all([
+      request(app).post("/api/caja/abrir").set("Authorization", `Bearer ${token}`).send({ montoApertura: 100 }),
+      request(app).post("/api/caja/abrir").set("Authorization", `Bearer ${token}`).send({ montoApertura: 200 }),
+    ]);
+
+    const estados = [primera.status, segunda.status].sort();
+    expect(estados).toEqual([201, 422]);
+
+    const abiertas = await request(app)
+      .get("/api/caja/abierta")
+      .set("Authorization", `Bearer ${token}`);
+    expect(abiertas.status).toBe(200);
+  });
 });

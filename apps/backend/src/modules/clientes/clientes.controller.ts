@@ -46,6 +46,7 @@ export async function registrarMovimientoCCController(req: Request, res: Respons
   const movimiento = await clientesService.registrarMovimientoCC(
     id,
     req.body as MovimientoCuentaCorrienteInput,
+    req.usuario!.id,
   );
   res.status(201).json(movimiento);
 }

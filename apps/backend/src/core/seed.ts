@@ -29,8 +29,17 @@ export async function seedInicial(): Promise<void> {
   const existeAdmin = await prisma.usuario.findUnique({ where: { email: adminEmail } });
   if (!existeAdmin) {
     const passwordHash = await bcrypt.hash("admin123", 10);
+    // La contraseña por defecto es la misma en toda instalación nueva: se
+    // fuerza el cambio antes de poder usar el resto del sistema (ver
+    // auth.service.ts login() y el gate en el frontend).
     await prisma.usuario.create({
-      data: { nombre: "Administrador", email: adminEmail, passwordHash, rolId: rolAdmin.id },
+      data: {
+        nombre: "Administrador",
+        email: adminEmail,
+        passwordHash,
+        rolId: rolAdmin.id,
+        debeCambiarPassword: true,
+      },
     });
   }
 }

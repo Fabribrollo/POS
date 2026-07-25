@@ -1,5 +1,5 @@
 import type { AsignarPrecioInput, CrearListaPrecioInput } from "@pos/shared";
-import { BusinessRuleError } from "../../core/errors/AppError.js";
+import { BusinessRuleError, NotFoundError } from "../../core/errors/AppError.js";
 import { buscarProducto } from "../productos/productos.service.js";
 import * as listasPrecioRepository from "./listasPrecio.repository.js";
 
@@ -22,6 +22,15 @@ export async function listarPreciosDeProducto(productoId: number) {
 
 export async function asignarPrecio(input: AsignarPrecioInput) {
   await buscarProducto(input.productoId);
+
+  const lista = await listasPrecioRepository.buscarPorId(input.listaPrecioId);
+  if (!lista) {
+    throw new NotFoundError("La lista de precios indicada no existe");
+  }
+  if (!lista.activo) {
+    throw new BusinessRuleError("No se puede asignar un precio a una lista de precios dada de baja");
+  }
+
   return listasPrecioRepository.asignarPrecio(
     input.productoId,
     input.listaPrecioId,

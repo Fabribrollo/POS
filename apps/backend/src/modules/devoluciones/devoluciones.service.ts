@@ -1,7 +1,8 @@
 import type { CrearDevolucionInput } from "@pos/shared";
-import { TIPO_DEVOLUCION, TIPO_MOVIMIENTO_CAJA, TIPO_MOVIMIENTO_STOCK } from "@pos/shared";
+import { ACCION_AUDITORIA, ENTIDAD_AUDITORIA, TIPO_DEVOLUCION, TIPO_MOVIMIENTO_CAJA, TIPO_MOVIMIENTO_STOCK } from "@pos/shared";
 import { prisma } from "../../core/prisma.js";
 import { BusinessRuleError, NotFoundError } from "../../core/errors/AppError.js";
+import { registrar } from "../auditoria/auditoria.service.js";
 import * as cajaService from "../caja/caja.service.js";
 import { registrarMovimientoCCTx } from "../clientes/clientes.service.js";
 import { aplicarMovimientoStockTx, resolverDepositoId, validarProductoYVariante } from "../stock/stock.service.js";
@@ -146,6 +147,19 @@ export async function crearDevolucion(input: CrearDevolucionInput, usuarioId: nu
         ventaId: venta.id,
       });
     }
+
+    await registrar(tx, {
+      usuarioId,
+      accion: ACCION_AUDITORIA.CREAR,
+      entidad: ENTIDAD_AUDITORIA.DEVOLUCION,
+      entidadId: devolucion.id,
+      detalle: {
+        ventaOriginalNumero: venta.numero,
+        tipo: input.tipo,
+        montoReintegro,
+        motivo: input.motivo,
+      },
+    });
 
     return devolucion;
   });

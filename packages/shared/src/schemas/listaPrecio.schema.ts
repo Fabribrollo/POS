@@ -8,6 +8,6 @@ export type CrearListaPrecioInput = z.infer<typeof crearListaPrecioSchema>;
 export const asignarPrecioSchema = z.object({
   productoId: z.number().int().positive(),
   listaPrecioId: z.number().int().positive(),
-  precio: z.number().nonnegative(),
+  precio: z.number().positive(),
 });
 export type AsignarPrecioInput = z.infer<typeof asignarPrecioSchema>;

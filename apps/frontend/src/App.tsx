@@ -1,9 +1,11 @@
 import { Navigate, Route, Routes } from "react-router-dom";
+import { CambiarPasswordObligatorio } from "@/features/auth/CambiarPasswordObligatorio";
 import { LoginPage } from "@/features/auth/LoginPage";
 import { CajaPage } from "@/features/caja/CajaPage";
 import { CajaReportePage } from "@/features/caja/CajaReportePage";
 import { DevolucionesPage } from "@/features/devoluciones/DevolucionesPage";
 import { ProductosPage } from "@/features/productos/ProductosPage";
+import { AuditoriaReportePage } from "@/features/reportes/AuditoriaReportePage";
 import { CajerosReportePage } from "@/features/reportes/CajerosReportePage";
 import { ClientesReportePage } from "@/features/reportes/ClientesReportePage";
 import { DashboardPage } from "@/features/reportes/DashboardPage";
@@ -13,6 +15,7 @@ import { InventarioReportePage } from "@/features/reportes/InventarioReportePage
 import { MediosPagoReportePage } from "@/features/reportes/MediosPagoReportePage";
 import { ProductosReportePage } from "@/features/reportes/ProductosReportePage";
 import { ReportesPage } from "@/features/reportes/ReportesPage";
+import { UsuariosPage } from "@/features/usuarios/UsuariosPage";
 import { VentaPage } from "@/features/ventas/VentaPage";
 import { VentasReportePage } from "@/features/ventas/VentasReportePage";
 import { AppShell } from "@/shared/layout/AppShell";
@@ -20,7 +23,12 @@ import { useAuthStore } from "@/shared/stores/auth.store";
 
 function RutaProtegida({ children }: { children: React.ReactNode }) {
   const token = useAuthStore((s) => s.token);
+  const debeCambiarPassword = useAuthStore((s) => s.debeCambiarPassword);
   if (!token) return <Navigate to="/login" replace />;
+  // Gate obligatorio: ni siquiera el nav de AppShell se renderiza hasta que
+  // cambie la contraseña por defecto (admin sembrado, o cualquiera al que le
+  // resetearon la contraseña desde el panel de usuarios).
+  if (debeCambiarPassword) return <CambiarPasswordObligatorio />;
   return <>{children}</>;
 }
 
@@ -46,6 +54,7 @@ function App() {
         <Route path="/productos" element={<ProductosPage />} />
         <Route path="/caja" element={<CajaPage />} />
         <Route path="/devoluciones" element={<DevolucionesPage />} />
+        <Route path="/usuarios" element={<UsuariosPage />} />
         <Route path="/reportes" element={<ReportesPage />}>
           <Route index element={<DashboardPage />} />
           <Route path="ventas" element={<VentasReportePage />} />
@@ -57,6 +66,7 @@ function App() {
           <Route path="medios-pago" element={<MediosPagoReportePage />} />
           <Route path="ganancias" element={<GananciasReportePage />} />
           <Route path="devoluciones" element={<DevolucionesReportePage />} />
+          <Route path="auditoria" element={<AuditoriaReportePage />} />
         </Route>
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

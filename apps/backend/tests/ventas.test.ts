@@ -119,6 +119,89 @@ describe("ventas", () => {
     expect(segundaAnulacion.status).toBe(422);
   });
 
+  it("ignora el precioUnitario manipulado y usa siempre el precio real del catálogo", async () => {
+    const res = await request(app)
+      .post("/api/ventas")
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        // El producto vale 2500 en el catálogo; se intenta comprar a $0.01.
+        items: [{ productoId, cantidad: 1, precioUnitario: 0.01, descuento: 0 }],
+        pagos: [{ medioPago: "EFECTIVO", monto: 0.01, recargo: 0 }],
+      });
+    // Los pagos (0.01) ya no cubren el total real (2500) → rechazada.
+    expect(res.status).toBe(422);
+  });
+
+  it("una venta creada con precioUnitario manipulado pero pagos correctos usa el precio real, no el enviado", async () => {
+    const res = await request(app)
+      .post("/api/ventas")
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        items: [{ productoId, cantidad: 1, precioUnitario: 1, descuento: 0 }],
+        pagos: [{ medioPago: "EFECTIVO", monto: 2500, recargo: 0 }],
+      });
+    expect(res.status).toBe(201);
+    expect(Number(res.body.total)).toBe(2500);
+    expect(Number(res.body.items[0].precioUnitario)).toBe(2500);
+  });
+
+  it("rechaza un descuento de ítem mayor a su propio subtotal", async () => {
+    const res = await request(app)
+      .post("/api/ventas")
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        items: [{ productoId, cantidad: 1, precioUnitario: 2500, descuento: 9999 }],
+        pagos: [{ medioPago: "EFECTIVO", monto: 0.01, recargo: 0 }],
+      });
+    expect(res.status).toBe(422);
+  });
+
+  it("rechaza un descuentoTotal mayor al subtotal de la venta", async () => {
+    const res = await request(app)
+      .post("/api/ventas")
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        items: [{ productoId, cantidad: 1, precioUnitario: 2500, descuento: 0 }],
+        descuentoTotal: 9999,
+        pagos: [{ medioPago: "EFECTIVO", monto: 0.01, recargo: 0 }],
+      });
+    expect(res.status).toBe(422);
+  });
+
+  it("el numero se deriva del id (siempre único, sin depender de un conteo previo)", async () => {
+    const venta = await request(app)
+      .post("/api/ventas")
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        items: [{ productoId, cantidad: 1, precioUnitario: 2500, descuento: 0 }],
+        pagos: [{ medioPago: "EFECTIVO", monto: 2500, recargo: 0 }],
+      });
+    expect(venta.status).toBe(201);
+    expect(venta.body.numero).toBe(String(venta.body.id).padStart(8, "0"));
+  });
+
+  it("dos ventas creadas casi al mismo tiempo obtienen numeros distintos", async () => {
+    const [a, b] = await Promise.all([
+      request(app)
+        .post("/api/ventas")
+        .set("Authorization", `Bearer ${token}`)
+        .send({
+          items: [{ productoId, cantidad: 1, precioUnitario: 2500, descuento: 0 }],
+          pagos: [{ medioPago: "EFECTIVO", monto: 2500, recargo: 0 }],
+        }),
+      request(app)
+        .post("/api/ventas")
+        .set("Authorization", `Bearer ${token}`)
+        .send({
+          items: [{ productoId, cantidad: 1, precioUnitario: 2500, descuento: 0 }],
+          pagos: [{ medioPago: "EFECTIVO", monto: 2500, recargo: 0 }],
+        }),
+    ]);
+    expect(a.status).toBe(201);
+    expect(b.status).toBe(201);
+    expect(a.body.numero).not.toBe(b.body.numero);
+  });
+
   it("no permite anular una venta de una caja ya cerrada", async () => {
     const venta = await request(app)
       .post("/api/ventas")

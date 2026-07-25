@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type { Prisma, PrismaClient } from "../../../generated/prisma/index.js";
 import { prisma } from "../../core/prisma.js";
 
@@ -15,15 +16,19 @@ export function buscarMedioPagoPorNombre(db: Db, nombre: string) {
   return db.medioPago.findUnique({ where: { nombre } });
 }
 
-export async function siguienteNumero(db: Db): Promise<string> {
-  const total = await db.venta.count();
-  return String(total + 1).padStart(8, "0");
+function formatearNumero(id: number): string {
+  return String(id).padStart(8, "0");
 }
 
-export function crear(
+// El numero se deriva del id autoincremental (create-then-update, mismo
+// patrón que codigoInterno/codigoBarras en productos.repository.ts) en vez
+// de un `count()+1` calculado antes del insert: dos ventas creadas casi
+// simultáneamente podían leer el mismo `count()` y terminar con el mismo
+// numero, chocando contra el @unique con un 500 crudo. El id autoincremental
+// de SQLite sí es atómico por diseño, así que nunca puede repetirse.
+export async function crear(
   db: Db,
   data: {
-    numero: string;
     clienteId?: number;
     usuarioId: number;
     cajaId: number;
@@ -48,9 +53,9 @@ export function crear(
     }[];
   },
 ) {
-  return db.venta.create({
+  const creada = await db.venta.create({
     data: {
-      numero: data.numero,
+      numero: randomUUID(), // placeholder único: se reemplaza abajo
       clienteId: data.clienteId,
       usuarioId: data.usuarioId,
       cajaId: data.cajaId,
@@ -60,6 +65,10 @@ export function crear(
       items: { create: data.items },
       pagos: { create: data.pagos },
     },
+  });
+  return db.venta.update({
+    where: { id: creada.id },
+    data: { numero: formatearNumero(creada.id) },
     include: includeCompleto,
   });
 }

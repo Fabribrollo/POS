@@ -186,4 +186,30 @@ describe("importación de productos por Excel", () => {
 
     expect(res.status).toBe(400);
   });
+
+  it("rechaza un archivo que no es un .xlsx real (firma inválida)", async () => {
+    const archivoBase64 = Buffer.from("esto no es un excel, es texto plano").toString("base64");
+
+    const res = await request(app)
+      .post("/api/productos/importar")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ archivoBase64 });
+
+    expect(res.status).toBe(400);
+  });
+
+  it("rechaza un archivo con firma PK pero contenido corrupto", async () => {
+    // Empieza con la firma de un ZIP ("PK") pero el resto es basura: pasa el
+    // chequeo de firma y debe fallar al intentar leerlo como xlsx real.
+    const archivoBase64 = Buffer.concat([Buffer.from("PK"), Buffer.from("basura-no-es-un-zip-valido")]).toString(
+      "base64",
+    );
+
+    const res = await request(app)
+      .post("/api/productos/importar")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ archivoBase64 });
+
+    expect(res.status).toBe(400);
+  });
 });

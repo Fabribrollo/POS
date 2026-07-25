@@ -1,7 +1,8 @@
 import type { AnularVentaInput, CrearVentaInput } from "@pos/shared";
-import { MEDIOS_PAGO, TIPO_MOVIMIENTO_STOCK } from "@pos/shared";
+import { ACCION_AUDITORIA, ENTIDAD_AUDITORIA, MEDIOS_PAGO, TIPO_MOVIMIENTO_STOCK } from "@pos/shared";
 import { prisma } from "../../core/prisma.js";
 import { BusinessRuleError, NotFoundError } from "../../core/errors/AppError.js";
+import { registrar } from "../auditoria/auditoria.service.js";
 import * as cajaService from "../caja/caja.service.js";
 import { buscarCliente, registrarMovimientoCCTx, saldoCCTx } from "../clientes/clientes.service.js";
 import { aplicarMovimientoStockTx, resolverDepositoId, validarProductoYVariante } from "../stock/stock.service.js";
@@ -49,19 +50,39 @@ export async function crearVenta(input: CrearVentaInput, usuarioId: number) {
 
   // Validar existencia de cada producto/variante antes de tocar la DB en
   // escritura (falla rápido con un mensaje claro en vez de un rollback
-  // tardío) y capturar el precioCosto vigente como snapshot para la
-  // rentabilidad histórica del reporte, que no debe moverse si el costo
-  // cambia después por una compra futura.
+  // tardío) y capturar precioCosto/precioVenta vigentes como snapshot. El
+  // precioUnitario que manda el cliente NUNCA se usa para calcular montos:
+  // se ignora a propósito y se recalcula siempre a partir del precio real
+  // del catálogo, para que nadie pueda vender un producto a un precio
+  // inventado con una request armada a mano (el frontend ya envía el precio
+  // de catálogo de todos modos, así que esto no cambia el flujo normal).
   const costoPorProducto = new Map<number, number>();
+  const precioPorProducto = new Map<number, number>();
   for (const item of input.items) {
     const producto = await validarProductoYVariante(item.productoId, item.varianteId);
     costoPorProducto.set(item.productoId, Number(producto.precioCosto));
+    precioPorProducto.set(item.productoId, Number(producto.precioVenta));
+  }
+
+  for (const item of input.items) {
+    const precioReal = precioPorProducto.get(item.productoId)!;
+    if (item.descuento > redondear(item.cantidad * precioReal) + TOLERANCIA_CENTAVOS) {
+      throw new BusinessRuleError(
+        `El descuento de un ítem no puede superar su propio subtotal`,
+      );
+    }
   }
 
   const subtotal = redondear(
-    input.items.reduce((acc, item) => acc + item.cantidad * item.precioUnitario - item.descuento, 0),
+    input.items.reduce((acc, item) => {
+      const precioReal = precioPorProducto.get(item.productoId)!;
+      return acc + item.cantidad * precioReal - item.descuento;
+    }, 0),
   );
-  const total = redondear(subtotal - input.descuentoTotal);
+  if (input.descuentoTotal > subtotal + TOLERANCIA_CENTAVOS) {
+    throw new BusinessRuleError("El descuento total no puede superar el subtotal de la venta");
+  }
+  const total = Math.max(0, redondear(subtotal - input.descuentoTotal));
 
   const totalPagos = redondear(input.pagos.reduce((acc, p) => acc + p.monto + p.recargo, 0));
   if (Math.abs(totalPagos - total) > TOLERANCIA_CENTAVOS) {
@@ -85,25 +106,25 @@ export async function crearVenta(input: CrearVentaInput, usuarioId: number) {
   );
 
   const venta = await prisma.$transaction(async (tx) => {
-    const numero = await ventasRepository.siguienteNumero(tx);
-
     const ventaCreada = await ventasRepository.crear(tx, {
-      numero,
       clienteId: input.clienteId,
       usuarioId,
       cajaId: caja.id,
       subtotal,
       descuentoTotal: input.descuentoTotal,
       total,
-      items: input.items.map((item) => ({
-        productoId: item.productoId,
-        varianteId: item.varianteId,
-        cantidad: item.cantidad,
-        precioUnitario: item.precioUnitario,
-        costoUnitario: costoPorProducto.get(item.productoId)!,
-        descuento: item.descuento,
-        subtotal: redondear(item.cantidad * item.precioUnitario - item.descuento),
-      })),
+      items: input.items.map((item) => {
+        const precioReal = precioPorProducto.get(item.productoId)!;
+        return {
+          productoId: item.productoId,
+          varianteId: item.varianteId,
+          cantidad: item.cantidad,
+          precioUnitario: precioReal,
+          costoUnitario: costoPorProducto.get(item.productoId)!,
+          descuento: item.descuento,
+          subtotal: redondear(item.cantidad * precioReal - item.descuento),
+        };
+      }),
       pagos: pagosConMedio,
     });
 
@@ -126,6 +147,14 @@ export async function crearVenta(input: CrearVentaInput, usuarioId: number) {
     if (montoSaldoUsado > 0) {
       await registrarMovimientoCCTx(tx, input.clienteId!, "DEBITO", montoSaldoUsado, ventaCreada.id);
     }
+
+    await registrar(tx, {
+      usuarioId,
+      accion: ACCION_AUDITORIA.CREAR,
+      entidad: ENTIDAD_AUDITORIA.VENTA,
+      entidadId: ventaCreada.id,
+      detalle: { numero: ventaCreada.numero, total, cantidadItems: input.items.length },
+    });
 
     return ventaCreada;
   });
@@ -185,6 +214,14 @@ export async function anularVenta(id: number, input: AnularVentaInput, usuarioId
     if (efectivo > 0) {
       await cajaService.revertirMovimientoVenta(tx, venta.cajaId, efectivo, venta.id, usuarioId);
     }
+
+    await registrar(tx, {
+      usuarioId,
+      accion: ACCION_AUDITORIA.ANULAR,
+      entidad: ENTIDAD_AUDITORIA.VENTA,
+      entidadId: venta.id,
+      detalle: { numero: venta.numero, motivo: input.motivo },
+    });
 
     return ventasRepository.anular(tx, id, input.motivo);
   });

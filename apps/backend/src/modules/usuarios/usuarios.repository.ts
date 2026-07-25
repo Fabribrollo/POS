@@ -5,6 +5,7 @@ const selectSinPassword = {
   nombre: true,
   email: true,
   activo: true,
+  debeCambiarPassword: true,
   ultimoLogin: true,
   createdAt: true,
   rol: { select: { id: true, nombre: true } },
@@ -35,7 +36,7 @@ export function crear(data: { nombre: string; email: string; passwordHash: strin
 
 export function actualizar(
   id: number,
-  data: { nombre?: string; rolId?: number; activo?: boolean },
+  data: { nombre?: string; rolId?: number; activo?: boolean; passwordHash?: string; debeCambiarPassword?: boolean },
 ) {
   return prisma.usuario.update({ where: { id }, data, select: selectSinPassword });
 }

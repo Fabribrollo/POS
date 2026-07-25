@@ -11,7 +11,12 @@ interface SesionUsuario {
 interface AuthState {
   token: string | null;
   usuario: SesionUsuario | null;
-  setSesion: (token: string, usuario: SesionUsuario) => void;
+  // No viaja en el JWT (que no cambia hasta el próximo login): se guarda
+  // aparte para poder mostrar/ocultar el gate obligatorio de cambio de
+  // contraseña sin depender de pedir un token nuevo.
+  debeCambiarPassword: boolean;
+  setSesion: (token: string, usuario: SesionUsuario, debeCambiarPassword: boolean) => void;
+  marcarPasswordCambiada: () => void;
   cerrarSesion: () => void;
 }
 
@@ -20,8 +25,10 @@ export const useAuthStore = create<AuthState>()(
     (set) => ({
       token: null,
       usuario: null,
-      setSesion: (token, usuario) => set({ token, usuario }),
-      cerrarSesion: () => set({ token: null, usuario: null }),
+      debeCambiarPassword: false,
+      setSesion: (token, usuario, debeCambiarPassword) => set({ token, usuario, debeCambiarPassword }),
+      marcarPasswordCambiada: () => set({ debeCambiarPassword: false }),
+      cerrarSesion: () => set({ token: null, usuario: null, debeCambiarPassword: false }),
     }),
     { name: "pos-auth" },
   ),

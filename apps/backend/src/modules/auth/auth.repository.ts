@@ -13,3 +13,14 @@ export function registrarUltimoLogin(usuarioId: number) {
     data: { ultimoLogin: new Date() },
   });
 }
+
+export function buscarUsuarioPorId(id: number) {
+  return prisma.usuario.findUnique({ where: { id } });
+}
+
+export function actualizarPassword(usuarioId: number, passwordHash: string) {
+  return prisma.usuario.update({
+    where: { id: usuarioId },
+    data: { passwordHash, debeCambiarPassword: false },
+  });
+}

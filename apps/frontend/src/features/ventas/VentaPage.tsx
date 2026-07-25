@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -10,14 +10,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -30,15 +22,9 @@ import { formatearMoneda } from "@/lib/utils";
 import { extraerMensajeError } from "@/shared/api/client";
 import { useCarritoStore } from "@/shared/stores/carrito.store";
 import type { Producto } from "../productos/productos.api";
+import { CobroModal, type PagoVenta } from "./CobroModal";
 import { imprimirTicket } from "./ticket";
 import { escanearCodigo, useCajaAbierta, useCrearVenta, useNegocio } from "./ventas.api";
-
-const MEDIOS_PAGO = ["EFECTIVO", "DEBITO", "CREDITO", "TRANSFERENCIA", "MERCADO_PAGO", "QR"] as const;
-
-interface PagoForm {
-  medioPago: (typeof MEDIOS_PAGO)[number];
-  monto: string;
-}
 
 function redondear(n: number): number {
   return Math.round(n * 100) / 100;
@@ -53,7 +39,7 @@ export function VentaPage() {
   const { data: caja, isLoading: cargandoCaja } = useCajaAbierta();
   const { items, agregar, quitar, setCantidad, setDescuentoPorcentaje, limpiar } = useCarritoStore();
   const [codigo, setCodigo] = useState("");
-  const [pagos, setPagos] = useState<PagoForm[]>([{ medioPago: "EFECTIVO", monto: "" }]);
+  const [cobroAbierto, setCobroAbierto] = useState(false);
   const [productoParaElegir, setProductoParaElegir] = useState<Producto | null>(null);
   const crearVenta = useCrearVenta();
   const { data: negocio } = useNegocio();
@@ -63,7 +49,42 @@ export function VentaPage() {
     0,
   );
   const total = subtotal;
-  const totalPagos = pagos.reduce((acc, p) => acc + Number(p.monto || 0), 0);
+
+  function abrirCobro() {
+    if (items.length === 0) {
+      toast.error("El carrito está vacío");
+      return;
+    }
+    setCobroAbierto(true);
+  }
+
+  // Dos Enter seguidos (con el campo de escaneo vacío) abren el cobro: el
+  // flujo natural es escanear todo y apretar Enter-Enter sin tocar el mouse.
+  // El Enter que confirma un escaneo no cuenta porque el campo tiene texto.
+  const entersSeguidos = useRef(0);
+  const codigoRef = useRef(codigo);
+  codigoRef.current = codigo;
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (cobroAbierto || productoParaElegir != null) {
+        entersSeguidos.current = 0;
+        return;
+      }
+      if (e.key === "Enter" && codigoRef.current.trim() === "") {
+        entersSeguidos.current += 1;
+        if (entersSeguidos.current >= 2) {
+          entersSeguidos.current = 0;
+          abrirCobro();
+        }
+      } else {
+        entersSeguidos.current = 0;
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+    // abrirCobro solo depende de items.length, cubierto acá.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cobroAbierto, productoParaElegir, items.length]);
 
   function agregarAlCarrito(
     producto: Producto,
@@ -114,25 +135,7 @@ export function VentaPage() {
     setProductoParaElegir(null);
   }
 
-  function actualizarPago(index: number, cambios: Partial<PagoForm>) {
-    setPagos((prev) => prev.map((p, i) => (i === index ? { ...p, ...cambios } : p)));
-  }
-
-  // Lo que falta pagar considerando los demás medios de pago ya cargados;
-  // nunca negativo, para no poder "rellenar" por encima del total.
-  function restantePorPagar(index: number): number {
-    const pagadoEnOtros = pagos.reduce(
-      (acc, p, i) => (i === index ? acc : acc + Number(p.monto || 0)),
-      0,
-    );
-    return Math.max(0, redondear(total - pagadoEnOtros));
-  }
-
-  async function confirmarVenta() {
-    if (items.length === 0) {
-      toast.error("El carrito está vacío");
-      return;
-    }
+  async function confirmarVenta(pagos: PagoVenta[]) {
     try {
       const venta = await crearVenta.mutateAsync({
         items: items.map((i) => ({
@@ -143,13 +146,11 @@ export function VentaPage() {
           descuento: descuentoLinea(i),
         })),
         descuentoTotal: 0,
-        pagos: pagos
-          .filter((p) => Number(p.monto) > 0)
-          .map((p) => ({ medioPago: p.medioPago, monto: Number(p.monto), recargo: 0 })),
+        pagos: pagos.map((p) => ({ medioPago: p.medioPago, monto: p.monto, recargo: 0 })),
       });
       toast.success("Venta registrada");
       limpiar();
-      setPagos([{ medioPago: "EFECTIVO", monto: "" }]);
+      setCobroAbierto(false);
       try {
         imprimirTicket(venta, negocio ?? { nombre: "Comprobante de venta", direccion: "", cuit: "" });
       } catch (err) {
@@ -281,58 +282,22 @@ export function VentaPage() {
             </div>
           </div>
 
-          <div className="space-y-2">
-            <Label>Pagos</Label>
-            {pagos.map((pago, index) => (
-              <div key={index} className="flex gap-2">
-                <Select
-                  value={pago.medioPago}
-                  onValueChange={(v) => actualizarPago(index, { medioPago: v as PagoForm["medioPago"] })}
-                >
-                  <SelectTrigger className="w-36">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {MEDIOS_PAGO.map((m) => (
-                      <SelectItem key={m} value={m}>
-                        {m}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Input
-                  type="number"
-                  placeholder="Monto"
-                  value={pago.monto}
-                  onChange={(e) => actualizarPago(index, { monto: e.target.value })}
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => actualizarPago(index, { monto: String(restantePorPagar(index)) })}
-                >
-                  Total
-                </Button>
-              </div>
-            ))}
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setPagos((prev) => [...prev, { medioPago: "EFECTIVO", monto: "" }])}
-            >
-              + Agregar medio de pago
-            </Button>
-            <p className="text-xs text-muted-foreground">
-              Pagado: ${formatearMoneda(totalPagos)} / ${formatearMoneda(total)}
-            </p>
-          </div>
-
-          <Button className="w-full" onClick={confirmarVenta} disabled={crearVenta.isPending}>
-            Confirmar venta
+          <Button className="w-full" onClick={abrirCobro}>
+            Cobrar
           </Button>
+          <p className="text-center text-xs text-muted-foreground">
+            Enter dos veces para cobrar
+          </p>
         </CardContent>
       </Card>
+
+      <CobroModal
+        abierto={cobroAbierto}
+        total={total}
+        pendiente={crearVenta.isPending}
+        onCerrar={() => setCobroAbierto(false)}
+        onConfirmar={confirmarVenta}
+      />
 
       <Dialog
         open={productoParaElegir != null}

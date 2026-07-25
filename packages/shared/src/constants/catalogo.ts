@@ -61,3 +61,25 @@ export const TIPO_DEVOLUCION = {
   NOTA_CREDITO: "NOTA_CREDITO",
 } as const;
 export type TipoDevolucion = (typeof TIPO_DEVOLUCION)[keyof typeof TIPO_DEVOLUCION];
+
+export const ACCION_AUDITORIA = {
+  CREAR: "CREAR",
+  ACTUALIZAR: "ACTUALIZAR",
+  DESACTIVAR: "DESACTIVAR",
+  REACTIVAR: "REACTIVAR",
+  ANULAR: "ANULAR",
+  ABRIR: "ABRIR",
+  CERRAR: "CERRAR",
+} as const;
+export type AccionAuditoria = (typeof ACCION_AUDITORIA)[keyof typeof ACCION_AUDITORIA];
+
+export const ENTIDAD_AUDITORIA = {
+  VENTA: "Venta",
+  DEVOLUCION: "Devolucion",
+  STOCK: "Stock",
+  CAJA: "Caja",
+  PRODUCTO: "Producto",
+  USUARIO: "Usuario",
+  CLIENTE: "Cliente",
+} as const;
+export type EntidadAuditoria = (typeof ENTIDAD_AUDITORIA)[keyof typeof ENTIDAD_AUDITORIA];

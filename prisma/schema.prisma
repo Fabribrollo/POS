@@ -62,6 +62,11 @@ model Usuario {
   rolId        Int
   rol          Rol       @relation(fields: [rolId], references: [id])
   activo       Boolean   @default(true)
+  // El admin sembrado en la primera instalación (ver core/seed.ts) arranca
+  // en true: nadie debe quedarse operando con la contraseña por defecto
+  // ("admin123") sin cambiarla. También se usa para forzar el cambio cuando
+  // un administrador resetea la contraseña de otro usuario.
+  debeCambiarPassword Boolean @default(false)
   ultimoLogin  DateTime?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
@@ -72,6 +77,7 @@ model Usuario {
   cajasAbiertas    Caja[]            @relation("CajaApertura")
   cajasCerradas    Caja[]            @relation("CajaCierre")
   devoluciones     Devolucion[]
+  logsAuditoria    LogAuditoria[]
 
   @@index([rolId])
 }
@@ -267,6 +273,15 @@ model Caja {
   montoCierreSistema   Decimal?
   diferencia           Decimal?
   estado               String    @default("ABIERTA") // ABIERTA | CERRADA
+  // `true` mientras está ABIERTA, `null` una vez CERRADA. Es la única razón
+  // de ser de este campo: SQLite no cuenta los NULL para un índice único, así
+  // que solo puede existir una fila con estadoAbierta=true a la vez, pero
+  // cualquier cantidad de filas cerradas (null) conviven sin problema. Es un
+  // constraint a nivel de base de datos, no solo una validación en el
+  // service: dos aperturas casi simultáneas ya no pueden colar dos cajas
+  // abiertas (antes se evitaba solo con un chequeo previo sin garantía real
+  // ante una carrera).
+  estadoAbierta        Boolean?  @unique
   fechaApertura        DateTime  @default(now())
   fechaCierre          DateTime?
   observaciones        String?
@@ -450,6 +465,31 @@ model ItemCompra {
   subtotal       Decimal
 
   @@index([compraId])
+}
+
+// ==================== AUDITORÍA ====================
+
+// Registro de solo-escritura (nunca se edita ni se borra una fila de acá,
+// ni siquiera al hacer baja lógica del usuario que la generó — por eso
+// usuarioId es opcional y sin cascade, para que el log sobreviva aunque el
+// usuario se desactive). No pretende ser un log genérico de TODA la app: solo
+// de las acciones que un dueño/administrador querría poder auditar después
+// (ventas, anulaciones, ajustes de stock manuales, caja, altas/bajas de
+// productos y usuarios, movimientos manuales de cuenta corriente).
+model LogAuditoria {
+  id        Int      @id @default(autoincrement())
+  usuarioId Int?
+  usuario   Usuario? @relation(fields: [usuarioId], references: [id])
+  accion    String   // CREAR | ACTUALIZAR | DESACTIVAR | REACTIVAR | ANULAR | ABRIR | CERRAR
+  entidad   String   // Venta | Devolucion | Stock | Caja | Producto | Usuario | Cliente
+  entidadId Int?
+  detalle   String?  // JSON con lo relevante (antes/después, montos, motivo)
+  createdAt DateTime @default(now())
+
+  @@index([usuarioId])
+  @@index([entidad, entidadId])
+  @@index([accion])
+  @@index([createdAt])
 }
 
 // ============================================================================

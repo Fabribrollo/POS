@@ -5,9 +5,10 @@ import type {
   CrearVarianteInput,
   ListarProductosQuery,
 } from "@pos/shared";
-import { TIPO_MOVIMIENTO_STOCK } from "@pos/shared";
+import { ACCION_AUDITORIA, ENTIDAD_AUDITORIA, TIPO_MOVIMIENTO_STOCK } from "@pos/shared";
 import { prisma } from "../../core/prisma.js";
 import { BusinessRuleError, NotFoundError } from "../../core/errors/AppError.js";
+import { registrar } from "../auditoria/auditoria.service.js";
 import * as categoriasRepository from "../categorias/categorias.repository.js";
 import * as marcasRepository from "../marcas/marcas.repository.js";
 import { aplicarMovimientoStockTx, registrarAjuste, resolverDepositoId } from "../stock/stock.service.js";
@@ -60,31 +61,76 @@ export async function escanearCodigo(codigo: string) {
   return { tipo: "elegir_variante" as const, producto };
 }
 
-export async function crearProducto(input: CrearProductoInput) {
+export async function crearProducto(input: CrearProductoInput, usuarioId: number) {
   await validarCategoriaYMarca(input.categoriaId, input.marcaId);
-  return productosRepository.crear(input);
+  const producto = await productosRepository.crear(input);
+  await registrar(prisma, {
+    usuarioId,
+    accion: ACCION_AUDITORIA.CREAR,
+    entidad: ENTIDAD_AUDITORIA.PRODUCTO,
+    entidadId: producto.id,
+    detalle: { nombre: producto.nombre, precioVenta: input.precioVenta, precioCosto: input.precioCosto },
+  });
+  return producto;
 }
 
 export function importarProductos(archivoBase64: string, usuarioId: number) {
   return importarProductosExcel(archivoBase64, usuarioId);
 }
 
-export async function actualizarProducto(id: number, input: ActualizarProductoInput) {
-  await buscarProducto(id);
+export async function actualizarProducto(id: number, input: ActualizarProductoInput, usuarioId: number) {
+  const anterior = await buscarProducto(id);
   await validarCategoriaYMarca(input.categoriaId, input.marcaId);
-  return productosRepository.actualizar(id, input);
+  const actualizado = await productosRepository.actualizar(id, input);
+
+  // Solo interesa dejar constancia de los campos sensibles (precio), no de
+  // cualquier campo (nombre, descripción) — eso sería ruido para el admin.
+  const cambios: Record<string, unknown> = {};
+  if (input.precioVenta !== undefined && input.precioVenta !== Number(anterior.precioVenta)) {
+    cambios.precioVenta = { antes: Number(anterior.precioVenta), despues: input.precioVenta };
+  }
+  if (input.precioCosto !== undefined && input.precioCosto !== Number(anterior.precioCosto)) {
+    cambios.precioCosto = { antes: Number(anterior.precioCosto), despues: input.precioCosto };
+  }
+  if (Object.keys(cambios).length > 0) {
+    await registrar(prisma, {
+      usuarioId,
+      accion: ACCION_AUDITORIA.ACTUALIZAR,
+      entidad: ENTIDAD_AUDITORIA.PRODUCTO,
+      entidadId: id,
+      detalle: cambios,
+    });
+  }
+
+  return actualizado;
 }
 
 // Baja lógica: un producto con ventas o movimientos de stock históricos no
 // se borra físicamente, solo se oculta del catálogo activo.
-export async function desactivarProducto(id: number) {
-  await buscarProducto(id);
-  return productosRepository.actualizar(id, { activo: false });
+export async function desactivarProducto(id: number, usuarioId: number) {
+  const anterior = await buscarProducto(id);
+  const producto = await productosRepository.actualizar(id, { activo: false });
+  await registrar(prisma, {
+    usuarioId,
+    accion: ACCION_AUDITORIA.DESACTIVAR,
+    entidad: ENTIDAD_AUDITORIA.PRODUCTO,
+    entidadId: id,
+    detalle: { nombre: anterior.nombre },
+  });
+  return producto;
 }
 
-export async function reactivarProducto(id: number) {
-  await buscarProducto(id);
-  return productosRepository.actualizar(id, { activo: true });
+export async function reactivarProducto(id: number, usuarioId: number) {
+  const anterior = await buscarProducto(id);
+  const producto = await productosRepository.actualizar(id, { activo: true });
+  await registrar(prisma, {
+    usuarioId,
+    accion: ACCION_AUDITORIA.REACTIVAR,
+    entidad: ENTIDAD_AUDITORIA.PRODUCTO,
+    entidadId: id,
+    detalle: { nombre: anterior.nombre },
+  });
+  return producto;
 }
 
 // El usuario solo carga color, talle y stock inicial: nombre, sku, código de

@@ -15,3 +15,4 @@ export * from "./schemas/cliente.schema.js";
 export * from "./schemas/proveedor.schema.js";
 export * from "./schemas/compra.schema.js";
 export * from "./schemas/reportes.schema.js";
+export * from "./schemas/auditoria.schema.js";

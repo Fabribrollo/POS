@@ -45,21 +45,30 @@ export async function buscarPorCodigoController(req: Request, res: Response): Pr
 }
 
 export async function crearController(req: Request, res: Response): Promise<void> {
-  const producto = await productosService.crearProducto(req.body as CrearProductoInput);
+  const producto = await productosService.crearProducto(
+    req.body as CrearProductoInput,
+    req.usuario!.id,
+  );
   res.status(201).json(producto);
 }
 
 export async function actualizarController(req: Request, res: Response): Promise<void> {
   const id = parseId(req.params.id);
-  res.json(await productosService.actualizarProducto(id, req.body as ActualizarProductoInput));
+  res.json(
+    await productosService.actualizarProducto(
+      id,
+      req.body as ActualizarProductoInput,
+      req.usuario!.id,
+    ),
+  );
 }
 
 export async function desactivarController(req: Request, res: Response): Promise<void> {
-  res.json(await productosService.desactivarProducto(parseId(req.params.id)));
+  res.json(await productosService.desactivarProducto(parseId(req.params.id), req.usuario!.id));
 }
 
 export async function reactivarController(req: Request, res: Response): Promise<void> {
-  res.json(await productosService.reactivarProducto(parseId(req.params.id)));
+  res.json(await productosService.reactivarProducto(parseId(req.params.id), req.usuario!.id));
 }
 
 export async function importarController(req: Request, res: Response): Promise<void> {

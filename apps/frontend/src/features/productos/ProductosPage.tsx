@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from "react";
-import { Layers, type LucideIcon, Package, Plus, Printer, Save, Trash2 } from "lucide-react";
+import { CheckSquare, Layers, type LucideIcon, Package, Plus, Printer, Save, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -144,6 +144,8 @@ export function ProductosPage() {
   const reactivarProducto = useReactivarProducto();
   const importarProductos = useImportarProductos();
   const inputArchivoRef = useRef<HTMLInputElement>(null);
+  const [modoSeleccion, setModoSeleccion] = useState(false);
+  const [seleccionados, setSeleccionados] = useState<Set<number>>(new Set());
 
   function ordenarPor(columna: ColumnaOrden) {
     setOrden((actual) => {
@@ -203,6 +205,49 @@ export function ProductosPage() {
     }
   }
 
+  function toggleModoSeleccion() {
+    setModoSeleccion((v) => !v);
+    setSeleccionados(new Set());
+  }
+
+  function toggleSeleccionado(id: number) {
+    setSeleccionados((actual) => {
+      const nuevo = new Set(actual);
+      if (nuevo.has(id)) {
+        nuevo.delete(id);
+      } else {
+        nuevo.add(id);
+      }
+      return nuevo;
+    });
+  }
+
+  function toggleSeleccionarTodos() {
+    setSeleccionados((actual) =>
+      actual.size === productosOrdenados.length
+        ? new Set()
+        : new Set(productosOrdenados.map((p) => p.id)),
+    );
+  }
+
+  async function handleEliminarSeleccionados() {
+    const cantidad = seleccionados.size;
+    if (cantidad === 0) return;
+    if (!confirm(`¿Eliminar ${cantidad} producto(s) seleccionado(s)?`)) return;
+
+    const resultados = await Promise.allSettled(
+      Array.from(seleccionados).map((id) => desactivarProducto.mutateAsync(id)),
+    );
+    const fallidos = resultados.filter((r) => r.status === "rejected").length;
+    const exitosos = cantidad - fallidos;
+
+    if (exitosos > 0) toast.success(`${exitosos} producto(s) eliminado(s)`);
+    if (fallidos > 0) toast.error(`${fallidos} producto(s) no se pudieron eliminar`);
+
+    setSeleccionados(new Set());
+    setModoSeleccion(false);
+  }
+
   async function handleImportar(e: React.ChangeEvent<HTMLInputElement>) {
     const archivo = e.target.files?.[0];
     e.target.value = "";
@@ -229,6 +274,29 @@ export function ProductosPage() {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Productos</h1>
         <div className="flex gap-2">
+          {modoSeleccion && seleccionados.size > 0 && (
+            <Button
+              variant="destructive"
+              onClick={handleEliminarSeleccionados}
+              disabled={desactivarProducto.isPending}
+            >
+              <Trash2 className="size-4" />
+              Eliminar seleccionados ({seleccionados.size})
+            </Button>
+          )}
+          <Button variant={modoSeleccion ? "secondary" : "outline"} onClick={toggleModoSeleccion}>
+            {modoSeleccion ? (
+              <>
+                <X className="size-4" />
+                Cancelar
+              </>
+            ) : (
+              <>
+                <CheckSquare className="size-4" />
+                Seleccionar
+              </>
+            )}
+          </Button>
           <Button variant="outline" onClick={() => descargarPlantillaProductos()}>
             Descargar plantilla
           </Button>
@@ -309,9 +377,9 @@ export function ProductosPage() {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="activos">Activos</SelectItem>
-              <SelectItem value="inactivos">Inactivos</SelectItem>
-              <SelectItem value="todos">Todos</SelectItem>
+              <SelectItem value="activos">activos</SelectItem>
+              <SelectItem value="inactivos">inactivos</SelectItem>
+              <SelectItem value="todos">todos</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -331,6 +399,18 @@ export function ProductosPage() {
         <Table>
           <TableHeader>
             <TableRow>
+              {modoSeleccion && (
+                <TableHead className="w-10">
+                  <input
+                    type="checkbox"
+                    checked={
+                      productosOrdenados.length > 0 && seleccionados.size === productosOrdenados.length
+                    }
+                    onChange={toggleSeleccionarTodos}
+                    aria-label="Seleccionar todos los productos"
+                  />
+                </TableHead>
+              )}
               <EncabezadoOrdenable columna="nombre" orden={orden} onClick={ordenarPor}>
                 Nombre
               </EncabezadoOrdenable>
@@ -374,7 +454,10 @@ export function ProductosPage() {
           <TableBody>
             {productosOrdenados.length === 0 && (
               <TableRow>
-                <TableCell colSpan={9} className="text-center text-sm text-muted-foreground">
+                <TableCell
+                  colSpan={modoSeleccion ? 10 : 9}
+                  className="text-center text-sm text-muted-foreground"
+                >
                   Sin productos para estos filtros
                 </TableCell>
               </TableRow>
@@ -383,8 +466,18 @@ export function ProductosPage() {
               <TableRow
                 key={p.id}
                 className="cursor-pointer hover:bg-muted/50"
-                onClick={() => setProductoEditar(p)}
+                onClick={() => (modoSeleccion ? toggleSeleccionado(p.id) : setProductoEditar(p))}
               >
+                {modoSeleccion && (
+                  <TableCell onClick={(e) => e.stopPropagation()}>
+                    <input
+                      type="checkbox"
+                      checked={seleccionados.has(p.id)}
+                      onChange={() => toggleSeleccionado(p.id)}
+                      aria-label={`Seleccionar ${p.nombre}`}
+                    />
+                  </TableCell>
+                )}
                 <TableCell>{p.nombre}</TableCell>
                 <TableCell>{p.codigoInterno}</TableCell>
                 <TableCell>{p.categoria?.nombre ?? "-"}</TableCell>

@@ -12,7 +12,7 @@ export function buscarPorId(id: number) {
 }
 
 export function crear(db: Db, usuarioAperturaId: number, montoApertura: number) {
-  return db.caja.create({ data: { usuarioAperturaId, montoApertura } });
+  return db.caja.create({ data: { usuarioAperturaId, montoApertura, estadoAbierta: true } });
 }
 
 export function cerrar(
@@ -28,7 +28,7 @@ export function cerrar(
 ) {
   return db.caja.update({
     where: { id },
-    data: { ...data, estado: "CERRADA", fechaCierre: new Date() },
+    data: { ...data, estado: "CERRADA", estadoAbierta: null, fechaCierre: new Date() },
   });
 }
 

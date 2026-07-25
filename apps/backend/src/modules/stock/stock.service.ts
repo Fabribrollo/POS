@@ -1,8 +1,9 @@
 import type { Prisma } from "../../../generated/prisma/index.js";
 import type { AjusteStockInput, EgresoStockInput, IngresoStockInput } from "@pos/shared";
-import { TIPO_MOVIMIENTO_STOCK } from "@pos/shared";
+import { ACCION_AUDITORIA, ENTIDAD_AUDITORIA, TIPO_MOVIMIENTO_STOCK } from "@pos/shared";
 import { prisma } from "../../core/prisma.js";
 import { BusinessRuleError, NotFoundError } from "../../core/errors/AppError.js";
+import { registrar } from "../auditoria/auditoria.service.js";
 import { eventBus } from "../../core/events/eventBus.js";
 import { buscarProducto } from "../productos/productos.service.js";
 import * as productosRepository from "../productos/productos.repository.js";
@@ -85,15 +86,23 @@ export async function registrarIngreso(input: IngresoStockInput, usuarioId: numb
   await validarProductoYVariante(input.productoId, input.varianteId);
   const depositoId = await resolverDepositoId(input.depositoId);
 
-  const { movimiento } = await prisma.$transaction((tx) =>
-    aplicarMovimientoStockTx(
+  const { movimiento } = await prisma.$transaction(async (tx) => {
+    const resultado = await aplicarMovimientoStockTx(
       tx,
       { productoId: input.productoId, varianteId: input.varianteId, depositoId, usuarioId },
       TIPO_MOVIMIENTO_STOCK.INGRESO,
       input.cantidad,
       input.motivo,
-    ),
-  );
+    );
+    await registrar(tx, {
+      usuarioId,
+      accion: ACCION_AUDITORIA.CREAR,
+      entidad: ENTIDAD_AUDITORIA.STOCK,
+      entidadId: input.productoId,
+      detalle: { tipo: "INGRESO", cantidad: input.cantidad, motivo: input.motivo, varianteId: input.varianteId },
+    });
+    return resultado;
+  });
   return movimiento;
 }
 
@@ -101,15 +110,23 @@ export async function registrarEgreso(input: EgresoStockInput, usuarioId: number
   const producto = await validarProductoYVariante(input.productoId, input.varianteId);
   const depositoId = await resolverDepositoId(input.depositoId);
 
-  const { movimiento, stockNuevo } = await prisma.$transaction((tx) =>
-    aplicarMovimientoStockTx(
+  const { movimiento, stockNuevo } = await prisma.$transaction(async (tx) => {
+    const resultado = await aplicarMovimientoStockTx(
       tx,
       { productoId: input.productoId, varianteId: input.varianteId, depositoId, usuarioId },
       TIPO_MOVIMIENTO_STOCK.EGRESO,
       -input.cantidad,
       input.motivo,
-    ),
-  );
+    );
+    await registrar(tx, {
+      usuarioId,
+      accion: ACCION_AUDITORIA.ACTUALIZAR,
+      entidad: ENTIDAD_AUDITORIA.STOCK,
+      entidadId: input.productoId,
+      detalle: { tipo: "EGRESO", cantidad: input.cantidad, motivo: input.motivo, varianteId: input.varianteId },
+    });
+    return resultado;
+  });
 
   if (stockNuevo <= producto.stockMinimo) {
     eventBus.emitEvent("stock.bajo", {
@@ -137,7 +154,7 @@ export async function registrarAjuste(input: AjusteStockInput, usuarioId: number
 
     await stockRepository.actualizarCantidad(tx, stock.id, input.cantidadNueva);
 
-    return stockRepository.crearMovimiento(tx, {
+    const movimiento = await stockRepository.crearMovimiento(tx, {
       productoId: input.productoId,
       varianteId: input.varianteId,
       depositoId,
@@ -148,6 +165,25 @@ export async function registrarAjuste(input: AjusteStockInput, usuarioId: number
       motivo: input.motivo,
       usuarioId,
     });
+
+    // El ajuste manual es la operación de stock más "arbitraria" (corrige a
+    // mano sin más respaldo que un motivo de texto libre), así que es la que
+    // más vale la pena dejar trazada para un dueño/administrador.
+    await registrar(tx, {
+      usuarioId,
+      accion: ACCION_AUDITORIA.ACTUALIZAR,
+      entidad: ENTIDAD_AUDITORIA.STOCK,
+      entidadId: input.productoId,
+      detalle: {
+        tipo: "AJUSTE",
+        stockAnterior: stock.cantidad,
+        stockNuevo: input.cantidadNueva,
+        motivo: input.motivo,
+        varianteId: input.varianteId,
+      },
+    });
+
+    return movimiento;
   });
 }
 

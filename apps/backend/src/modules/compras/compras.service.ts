@@ -7,7 +7,10 @@ import { aplicarMovimientoStockTx, resolverDepositoId, validarProductoYVariante 
 import * as comprasRepository from "./compras.repository.js";
 
 export async function crearCompra(input: CrearCompraInput, _usuarioId: number) {
-  await buscarProveedor(input.proveedorId);
+  const proveedor = await buscarProveedor(input.proveedorId);
+  if (!proveedor.activo) {
+    throw new BusinessRuleError("No se puede generar una compra a un proveedor dado de baja");
+  }
 
   for (const item of input.items) {
     await validarProductoYVariante(item.productoId, item.varianteId);
@@ -16,9 +19,7 @@ export async function crearCompra(input: CrearCompraInput, _usuarioId: number) {
   const total = input.items.reduce((acc, item) => acc + item.cantidad * item.precioUnitario, 0);
 
   return prisma.$transaction(async (tx) => {
-    const numero = await comprasRepository.siguienteNumero(tx);
     return comprasRepository.crear(tx, {
-      numero,
       proveedorId: input.proveedorId,
       total,
       items: input.items.map((item) => ({

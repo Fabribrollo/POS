@@ -15,5 +15,9 @@ export const actualizarUsuarioSchema = z.object({
   nombre: z.string().min(1).optional(),
   rol: rolNombreEnum.optional(),
   activo: z.boolean().optional(),
+  // Reseteo de contraseña por un administrador (distinto del autoservicio de
+  // POST /auth/cambiar-password). Al usarlo, se fuerza a que el usuario
+  // afectado tenga que cambiarla de nuevo en su próximo login.
+  password: z.string().min(6, "La contraseña debe tener al menos 6 caracteres").optional(),
 });
 export type ActualizarUsuarioInput = z.infer<typeof actualizarUsuarioSchema>;

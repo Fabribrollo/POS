@@ -270,7 +270,21 @@ export async function importarProductosExcel(
   archivoBase64: string,
   usuarioId: number,
 ): Promise<ResultadoImportacionExcel> {
-  const libro = XLSX.read(archivoBase64, { type: "base64" });
+  const buffer = Buffer.from(archivoBase64, "base64");
+  // Un .xlsx es en el fondo un ZIP: siempre arranca con la firma "PK". Un
+  // rechazo temprano acá da un mensaje claro en vez de dejar que XLSX.read
+  // tire una excepción críptica (o, con un archivo malicioso, intente
+  // interpretar cualquier cosa como si fuera un Excel).
+  if (buffer.length < 4 || buffer.toString("ascii", 0, 2) !== "PK") {
+    throw new ValidationError("El archivo no es un Excel (.xlsx) válido");
+  }
+
+  let libro: XLSX.WorkBook;
+  try {
+    libro = XLSX.read(buffer, { type: "buffer" });
+  } catch {
+    throw new ValidationError("No se pudo leer el archivo: no es un Excel (.xlsx) válido o está dañado");
+  }
 
   const filasProductos = leerFilas(libro, HOJA_PRODUCTOS, COLUMNAS_PRODUCTOS);
   const filasVariantes = leerFilas(libro, HOJA_VARIANTES, COLUMNAS_VARIANTES);

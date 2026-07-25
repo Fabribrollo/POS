@@ -3,9 +3,11 @@ import type {
   CrearClienteInput,
   MovimientoCuentaCorrienteInput,
 } from "@pos/shared";
+import { ACCION_AUDITORIA, ENTIDAD_AUDITORIA } from "@pos/shared";
 import type { Prisma, PrismaClient } from "../../../generated/prisma/index.js";
 import { prisma } from "../../core/prisma.js";
 import { BusinessRuleError, NotFoundError } from "../../core/errors/AppError.js";
+import { registrar } from "../auditoria/auditoria.service.js";
 import * as clientesRepository from "./clientes.repository.js";
 
 type Db = PrismaClient | Prisma.TransactionClient;
@@ -87,6 +89,7 @@ export async function registrarMovimientoCCTx(
 export async function registrarMovimientoCC(
   clienteId: number,
   input: MovimientoCuentaCorrienteInput,
+  usuarioId: number,
 ) {
   const cliente = await buscarCliente(clienteId);
   const saldoAnterior = await saldoCCTx(prisma, clienteId);
@@ -103,11 +106,23 @@ export async function registrarMovimientoCC(
     );
   }
 
-  return clientesRepository.crearMovimientoCC(prisma, {
+  const movimiento = await clientesRepository.crearMovimientoCC(prisma, {
     clienteId,
     tipo: input.tipo,
     monto: input.monto,
     saldoAnterior,
     saldoNuevo,
   });
+
+  // Ajuste manual de cuenta corriente (no el generado automáticamente por una
+  // venta/devolución, que ya queda auditado como parte de esa operación).
+  await registrar(prisma, {
+    usuarioId,
+    accion: ACCION_AUDITORIA.ACTUALIZAR,
+    entidad: ENTIDAD_AUDITORIA.CLIENTE,
+    entidadId: clienteId,
+    detalle: { cliente: cliente.nombre, tipo: input.tipo, monto: input.monto, saldoAnterior, saldoNuevo },
+  });
+
+  return movimiento;
 }

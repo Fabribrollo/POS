@@ -8,6 +8,10 @@ export function buscarPorNombre(nombre: string) {
   return prisma.listaPrecio.findUnique({ where: { nombre } });
 }
 
+export function buscarPorId(id: number) {
+  return prisma.listaPrecio.findUnique({ where: { id } });
+}
+
 export function crear(nombre: string) {
   return prisma.listaPrecio.create({ data: { nombre } });
 }

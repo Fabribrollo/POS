@@ -1,8 +1,10 @@
 import { tienePermiso } from "@pos/shared";
-import { LogOut, LayoutGrid, Package, RotateCcw, ShoppingCart, Wallet } from "lucide-react";
+import { LogOut, LayoutGrid, Package, RotateCcw, ShoppingCart, Users, Wallet } from "lucide-react";
 import { NavLink, Outlet } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import { useNegocio } from "@/features/ventas/ventas.api";
 import { useAuthStore } from "@/shared/stores/auth.store";
+
 
 const links = [
   { to: "/ventas", label: "Punto de venta", icon: ShoppingCart, permiso: "VENTAS_CREAR" as const },
@@ -10,11 +12,13 @@ const links = [
   { to: "/caja", label: "Caja", icon: Wallet, permiso: "CAJA_ABRIR_CERRAR" as const },
   { to: "/devoluciones", label: "Devoluciones", icon: RotateCcw, permiso: "DEVOLUCIONES_CREAR" as const },
   { to: "/reportes", label: "Reportes", icon: LayoutGrid, permiso: "REPORTES_VER" as const },
+  { to: "/usuarios", label: "Usuarios", icon: Users, permiso: "USUARIOS_ADMINISTRAR" as const },
 ];
 
 export function AppShell() {
   const usuario = useAuthStore((s) => s.usuario);
   const cerrarSesion = useAuthStore((s) => s.cerrarSesion);
+  const { data: negocio } = useNegocio();
 
   if (!usuario) return null;
 
@@ -22,7 +26,7 @@ export function AppShell() {
     <div className="flex h-svh">
       <aside className="flex h-full w-56 shrink-0 flex-col overflow-y-auto border-r bg-sidebar p-4">
         <div className="mb-6 px-2">
-          <p className="text-sm font-semibold text-sidebar-foreground">POS Indumentaria</p>
+          <p className="text-sm font-semibold text-sidebar-foreground">{negocio?.nombre ?? "POS"}</p>
           <p className="text-xs text-muted-foreground">
             {usuario.nombre} · {usuario.rol}
           </p>

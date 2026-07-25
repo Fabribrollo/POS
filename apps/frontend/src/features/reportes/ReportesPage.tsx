@@ -1,5 +1,7 @@
+import { tienePermiso } from "@pos/shared";
 import { NavLink, Outlet } from "react-router-dom";
 import { cn } from "@/lib/utils";
+import { useAuthStore } from "@/shared/stores/auth.store";
 
 const TABS = [
   { to: "/reportes", label: "Dashboard", end: true },
@@ -14,12 +16,20 @@ const TABS = [
   { to: "/reportes/devoluciones", label: "Devoluciones", end: false },
 ];
 
+// La auditoría es deliberadamente más restrictiva que el resto de Reportes:
+// puede incluir acciones del propio Encargado, así que solo se muestra a
+// quien tenga el permiso AUDITORIA_VER (exclusivo de ADMINISTRADOR).
+const TAB_AUDITORIA = { to: "/reportes/auditoria", label: "Auditoría", end: false };
+
 export function ReportesPage() {
+  const usuario = useAuthStore((s) => s.usuario);
+  const tabs = usuario && tienePermiso(usuario.rol, "AUDITORIA_VER") ? [...TABS, TAB_AUDITORIA] : TABS;
+
   return (
     <div className="space-y-4">
       <h1 className="text-2xl font-semibold">Reportes</h1>
       <div className="flex gap-1 overflow-x-auto border-b no-imprimir">
-        {TABS.map((tab) => (
+        {tabs.map((tab) => (
           <NavLink
             key={tab.to}
             to={tab.to}
