@@ -1,3 +1,11 @@
+import {
+  Banknote,
+  CreditCard,
+  Landmark,
+  QrCode,
+  Smartphone,
+  type LucideIcon,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -36,45 +44,16 @@ export interface PagoVenta {
 // Billetes en circulación de pesos argentinos, para cargar rápido lo recibido.
 const BILLETES = [100, 500, 1000, 2000, 10000, 20000] as const;
 
-// Cada medio con su color propio para que las cards se distingan de un
-// vistazo. El tinte de fondo está siempre; el anillo marca el seleccionado.
-const MEDIOS: { valor: MedioPagoVenta; etiqueta: string; clases: string; clasesActivo: string }[] = [
-  {
-    valor: "EFECTIVO",
-    etiqueta: "Efectivo",
-    clases: "border-emerald-300 bg-emerald-50 text-emerald-900 hover:bg-emerald-100",
-    clasesActivo: "border-emerald-600 ring-2 ring-emerald-500",
-  },
-  {
-    valor: "DEBITO",
-    etiqueta: "Débito",
-    clases: "border-blue-300 bg-blue-50 text-blue-900 hover:bg-blue-100",
-    clasesActivo: "border-blue-600 ring-2 ring-blue-500",
-  },
-  {
-    valor: "CREDITO",
-    etiqueta: "Crédito",
-    clases: "border-violet-300 bg-violet-50 text-violet-900 hover:bg-violet-100",
-    clasesActivo: "border-violet-600 ring-2 ring-violet-500",
-  },
-  {
-    valor: "TRANSFERENCIA",
-    etiqueta: "Transferencia",
-    clases: "border-amber-300 bg-amber-50 text-amber-900 hover:bg-amber-100",
-    clasesActivo: "border-amber-600 ring-2 ring-amber-500",
-  },
-  {
-    valor: "MERCADO_PAGO",
-    etiqueta: "Mercado Pago",
-    clases: "border-cyan-300 bg-cyan-50 text-cyan-900 hover:bg-cyan-100",
-    clasesActivo: "border-cyan-600 ring-2 ring-cyan-500",
-  },
-  {
-    valor: "QR",
-    etiqueta: "QR",
-    clases: "border-rose-300 bg-rose-50 text-rose-900 hover:bg-rose-100",
-    clasesActivo: "border-rose-600 ring-2 ring-rose-500",
-  },
+// Todas las cards son neutras: el ícono distingue el medio, el color de
+// acento (único en toda la app) marca cuál está seleccionado. El color no se
+// usa para decorar opciones que no tienen ningún estado distinto entre sí.
+const MEDIOS: { valor: MedioPagoVenta; etiqueta: string; icono: LucideIcon }[] = [
+  { valor: "EFECTIVO", etiqueta: "Efectivo", icono: Banknote },
+  { valor: "DEBITO", etiqueta: "Débito", icono: CreditCard },
+  { valor: "CREDITO", etiqueta: "Crédito", icono: CreditCard },
+  { valor: "TRANSFERENCIA", etiqueta: "Transferencia", icono: Landmark },
+  { valor: "MERCADO_PAGO", etiqueta: "Mercado Pago", icono: Smartphone },
+  { valor: "QR", etiqueta: "QR", icono: QrCode },
 ];
 
 interface PagoForm {
@@ -167,11 +146,12 @@ export function CobroModal({ abierto, total, pendiente, onCerrar, onConfirmar }:
                     type="button"
                     onClick={() => setMedio(m.valor)}
                     className={cn(
-                      "rounded-lg border-2 p-3 text-sm font-medium transition-colors",
-                      m.clases,
-                      medio === m.valor && m.clasesActivo,
+                      "flex flex-col items-center gap-1.5 rounded-lg border p-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted/50",
+                      medio === m.valor &&
+                        "border-primary bg-accent text-accent-foreground",
                     )}
                   >
+                    <m.icono className="size-5" />
                     {m.etiqueta}
                   </button>
                 ))}
@@ -209,7 +189,7 @@ export function CobroModal({ abierto, total, pendiente, onCerrar, onConfirmar }:
                     <p
                       className={cn(
                         "text-center text-lg font-semibold",
-                        vuelto >= 0 ? "text-emerald-700" : "text-destructive",
+                        vuelto >= 0 ? "text-success" : "text-destructive",
                       )}
                     >
                       {vuelto >= 0

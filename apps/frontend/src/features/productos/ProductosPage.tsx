@@ -486,9 +486,7 @@ export function ProductosPage() {
                 <TableCell className="text-right">${formatearMoneda(p.precioCosto)}</TableCell>
                 <TableCell className="text-right">${formatearMoneda(p.precioVenta)}</TableCell>
                 <TableCell>
-                  <Badge variant={p.activo ? "outline" : "destructive"}>
-                    {p.activo ? "Activo" : "Inactivo"}
-                  </Badge>
+                  {!p.activo && <Badge variant="destructive">Inactivo</Badge>}
                 </TableCell>
                 <TableCell className="text-right">
                   {p.activo ? (
@@ -526,10 +524,8 @@ export function ProductosPage() {
           <DialogHeader>
             <div className="flex items-center gap-2">
               <DialogTitle>{productoEditar?.nombre}</DialogTitle>
-              {productoEditar && (
-                <Badge variant={productoEditar.activo ? "outline" : "destructive"}>
-                  {productoEditar.activo ? "Activo" : "Inactivo"}
-                </Badge>
+              {productoEditar && !productoEditar.activo && (
+                <Badge variant="destructive">Inactivo</Badge>
               )}
             </div>
             {productoEditar && (

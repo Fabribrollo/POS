@@ -20,7 +20,7 @@ export function KpiCard({
           <p className="text-xs text-muted-foreground">{label}</p>
           <p className="text-xl font-semibold">{valor}</p>
           {variacion != null && (
-            <p className={cn("text-xs", variacion >= 0 ? "text-green-600" : "text-destructive")}>
+            <p className={cn("text-xs", variacion >= 0 ? "text-success" : "text-destructive")}>
               {variacion >= 0 ? "▲" : "▼"} {Math.abs(variacion).toFixed(1)}% vs período anterior
             </p>
           )}

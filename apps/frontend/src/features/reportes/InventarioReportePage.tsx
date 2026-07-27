@@ -21,7 +21,7 @@ const COLUMNAS: ColumnaTabla<InventarioItem>[] = [
       <span className="inline-flex items-center gap-2">
         {i.cantidad}
         {i.stockBajo && (
-          <Badge variant="destructive" className="text-[10px]">
+          <Badge variant="warning" className="text-[10px]">
             Stock bajo
           </Badge>
         )}

@@ -3,7 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -254,10 +254,8 @@ export function DevolucionesPage() {
 
   return (
     <div className="max-w-3xl space-y-4">
+      <h1 className="text-2xl font-semibold">Devoluciones</h1>
       <Card>
-        <CardHeader>
-          <CardTitle>Devoluciones</CardTitle>
-        </CardHeader>
         <CardContent className="space-y-4">
           <form onSubmit={buscar} className="flex gap-2">
             <Input

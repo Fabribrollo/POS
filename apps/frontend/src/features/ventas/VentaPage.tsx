@@ -182,6 +182,7 @@ export function VentaPage() {
   return (
     <div className="grid grid-cols-3 gap-6">
       <div className="col-span-2 space-y-4">
+        <h1 className="text-2xl font-semibold">Punto de venta</h1>
         <form onSubmit={buscarYAgregar} className="flex gap-2">
           <Input
             placeholder="Código de barras / SKU / código interno"
@@ -246,7 +247,7 @@ export function VentaPage() {
                 </TableCell>
                 <TableCell>
                   <Button
-                    variant="ghost"
+                    variant="destructive"
                     size="sm"
                     onClick={() => quitar(item.productoId, item.varianteId)}
                   >

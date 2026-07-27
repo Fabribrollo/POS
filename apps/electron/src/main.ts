@@ -1,11 +1,19 @@
 import path from "node:path";
-import { app, BrowserWindow } from "electron";
+import { app, BrowserWindow, Menu } from "electron";
 import { startBackend } from "./backend-bootstrap.js";
 
 // __dirname es nativo acá: el bundle final (ver esbuild.config.mjs) se
 // genera en CJS a propósito, así que no hace falta derivarlo de
 // import.meta.url como en ESM puro.
 const isDev = !app.isPackaged;
+
+// Sin esto, Windows/Linux muestran la barra de menú por defecto de Electron
+// (File/Edit/View/...), que no tiene sentido para un POS de pantalla
+// completa con su propia navegación. En dev se deja para poder abrir
+// DevTools desde el menú si hace falta.
+if (!isDev) {
+  Menu.setApplicationMenu(null);
+}
 
 async function createWindow(): Promise<void> {
   const win = new BrowserWindow({
