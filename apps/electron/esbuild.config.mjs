@@ -1,4 +1,5 @@
 import { build } from "esbuild";
+import dotenv from "dotenv";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -52,5 +53,42 @@ for (const archivo of fs.readdirSync(prismaGenerado)) {
     fs.copyFileSync(path.join(prismaGenerado, archivo), path.join("dist", archivo));
   }
 }
+
+// El proceso de Electron (main.ts) nunca carga el .env del repo (a
+// diferencia de `pnpm dev:backend`, que sí lo hace vía src/dev.ts), así que
+// sin esto NEGOCIO_NOMBRE/DIRECCION/CUIT/LOGO quedarían siempre en su
+// fallback hardcodeado, tanto en dev:electron como en el paquete final. Se
+// resuelve acá, en build-time, y se vuelca a un JSON que main.ts lee en
+// runtime — evita tener que bundlear dotenv en el proceso de Electron y
+// unifica dev/prod bajo el mismo mecanismo (ambos corren este script antes
+// de levantar la app).
+const repoRoot = path.resolve("../..");
+const envPath = path.join(repoRoot, ".env");
+const negocioEnv = fs.existsSync(envPath) ? dotenv.parse(fs.readFileSync(envPath)) : {};
+
+let logoFile = null;
+if (negocioEnv.NEGOCIO_LOGO) {
+  const logoSrc = path.resolve(repoRoot, negocioEnv.NEGOCIO_LOGO);
+  if (fs.existsSync(logoSrc)) {
+    logoFile = `logo${path.extname(logoSrc)}`;
+    fs.copyFileSync(logoSrc, path.join("dist", logoFile));
+  } else {
+    console.warn(`[esbuild] NEGOCIO_LOGO apunta a un archivo inexistente: ${logoSrc}`);
+  }
+}
+
+fs.writeFileSync(
+  path.join("dist", "negocio.config.json"),
+  JSON.stringify(
+    {
+      nombre: negocioEnv.NEGOCIO_NOMBRE ?? "",
+      direccion: negocioEnv.NEGOCIO_DIRECCION ?? "",
+      cuit: negocioEnv.NEGOCIO_CUIT ?? "",
+      logoFile,
+    },
+    null,
+    2,
+  ),
+);
 
 console.log("[esbuild] main.cjs, preload.cjs y binarios del motor Prisma listos en dist/");

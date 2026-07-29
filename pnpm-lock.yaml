@@ -106,6 +106,9 @@ importers:
       '@types/node':
         specifier: ^22.10.5
         version: 22.20.0
+      dotenv:
+        specifier: ^16.4.7
+        version: 16.6.1
       electron:
         specifier: ^33.2.1
         version: 33.4.11

@@ -4,11 +4,16 @@ import { z } from "zod";
 // color/talle y del id autoincremental (ver nombreVariante y
 // generarSkuVariante/generarCodigoBarrasVariante en el backend). El precio de
 // una variante siempre es el del producto, no tiene override propio.
-export const crearVarianteSchema = z.object({
-  color: z.string().optional(),
-  talle: z.string().optional(),
-  stock: z.number().int().nonnegative(),
-});
+export const crearVarianteSchema = z
+  .object({
+    color: z.string().optional(),
+    talle: z.string().optional(),
+    stock: z.number().int().nonnegative(),
+  })
+  .refine((data) => Boolean(data.color?.trim()) || Boolean(data.talle?.trim()), {
+    message: "La variante necesita color o talle",
+    path: ["color"],
+  });
 export type CrearVarianteInput = z.infer<typeof crearVarianteSchema>;
 
 export const actualizarVarianteSchema = z.object({

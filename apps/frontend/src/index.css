@@ -23,6 +23,7 @@
     --color-chart-1: var(--chart-1);
     --color-ring: var(--ring);
     --color-input: var(--input);
+    --color-disabled: var(--disabled);
     --color-border: var(--border);
     --color-destructive: var(--destructive);
     --color-success: var(--success);
@@ -78,6 +79,9 @@
     --warning-foreground: oklch(0.2 0.05 75);
     --border: oklch(0.922 0 0);
     --input: oklch(0.922 0 0);
+    /* Más saturado y oscuro que --input a propósito: un campo disabled tiene
+       que notarse de un vistazo, no perderse como un input normal apagado. */
+    --disabled: oklch(0.87 0.045 75);
     --ring: oklch(0.6 0.13 258);
     --chart-1: oklch(0.48 0.15 258);
     --chart-2: oklch(0.556 0 0);
@@ -117,6 +121,7 @@
     --warning-foreground: oklch(0.16 0.03 75);
     --border: oklch(1 0 0 / 10%);
     --input: oklch(1 0 0 / 15%);
+    --disabled: oklch(0.4 0.06 75);
     --ring: oklch(0.72 0.13 258);
     --chart-1: oklch(0.72 0.13 258);
     --chart-2: oklch(0.556 0 0);

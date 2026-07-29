@@ -15,6 +15,7 @@
     "@pos/backend": "workspace:*",
     "@prisma/client": "^6.10.1",
     "@types/node": "^22.10.5",
+    "dotenv": "^16.4.7",
     "electron": "^33.2.1",
     "electron-builder": "^25.1.8",
     "esbuild": "^0.24.0",

@@ -152,7 +152,7 @@ export function VentaPage() {
       limpiar();
       setCobroAbierto(false);
       try {
-        imprimirTicket(venta, negocio ?? { nombre: "Comprobante de venta", direccion: "", cuit: "" });
+        imprimirTicket(venta, negocio ?? { nombre: "Comprobante de venta", direccion: "", cuit: "", logoUrl: null });
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "No se pudo imprimir el ticket");
       }

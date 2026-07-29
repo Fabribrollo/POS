@@ -113,13 +113,19 @@ export function useVariantes(productoId: number | undefined) {
   });
 }
 
+// Las 3 mutaciones de variantes invalidan también ["productos"] (no solo la
+// sub-lista de variantes): el stockTotal que se ve en la pantalla de
+// Productos es una suma calculada de las variantes, así que sin esto quedaba
+// desactualizado hasta cambiar de pestaña y volver.
 export function useCrearVariante(productoId: number) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (input: CrearVarianteInput) =>
       (await api.post<Variante>(`/productos/${productoId}/variantes`, input)).data,
-    onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: ["productos", productoId, "variantes"] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["productos", productoId, "variantes"] });
+      queryClient.invalidateQueries({ queryKey: ["productos"] });
+    },
   });
 }
 
@@ -128,8 +134,10 @@ export function useActualizarVariante(productoId: number) {
   return useMutation({
     mutationFn: async ({ id, input }: { id: number; input: ActualizarVarianteInput }) =>
       (await api.patch<Variante>(`/productos/variantes/${id}`, input)).data,
-    onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: ["productos", productoId, "variantes"] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["productos", productoId, "variantes"] });
+      queryClient.invalidateQueries({ queryKey: ["productos"] });
+    },
   });
 }
 
@@ -137,8 +145,10 @@ export function useDesactivarVariante(productoId: number) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (id: number) => (await api.delete(`/productos/variantes/${id}`)).data,
-    onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: ["productos", productoId, "variantes"] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["productos", productoId, "variantes"] });
+      queryClient.invalidateQueries({ queryKey: ["productos"] });
+    },
   });
 }
 

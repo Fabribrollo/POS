@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import path from "node:path";
 import { app, BrowserWindow, Menu } from "electron";
 import { startBackend } from "./backend-bootstrap.js";
@@ -6,6 +7,37 @@ import { startBackend } from "./backend-bootstrap.js";
 // genera en CJS a propósito, así que no hace falta derivarlo de
 // import.meta.url como en ESM puro.
 const isDev = !app.isPackaged;
+
+interface NegocioConfig {
+  nombre: string;
+  direccion: string;
+  cuit: string;
+  logoFile: string | null;
+}
+
+// Generado por esbuild.config.mjs a partir del .env de la raíz del repo
+// (ver ese archivo para el porqué: main.ts nunca carga dotenv directamente).
+// Vive al lado de main.cjs en dist/, así que __dirname sirve tanto en dev
+// como empaquetado.
+function leerNegocioConfig(): NegocioConfig {
+  try {
+    const raw = fs.readFileSync(path.join(__dirname, "negocio.config.json"), "utf-8");
+    return JSON.parse(raw) as NegocioConfig;
+  } catch {
+    return { nombre: "", direccion: "", cuit: "", logoFile: null };
+  }
+}
+
+const negocioConfig = leerNegocioConfig();
+const negocioLogoPath = negocioConfig.logoFile ? path.join(__dirname, negocioConfig.logoFile) : null;
+
+// Se setean acá (antes de que backend-bootstrap.ts importe @pos/backend) en
+// vez de dejar que el backend lea el .env por su cuenta: así el mismo valor
+// sirve para el título/ícono de esta ventana y para lo que expone la API.
+if (negocioConfig.nombre) process.env.NEGOCIO_NOMBRE = negocioConfig.nombre;
+if (negocioConfig.direccion) process.env.NEGOCIO_DIRECCION = negocioConfig.direccion;
+if (negocioConfig.cuit) process.env.NEGOCIO_CUIT = negocioConfig.cuit;
+if (negocioLogoPath) process.env.NEGOCIO_LOGO = negocioLogoPath;
 
 // Sin esto, Windows/Linux muestran la barra de menú por defecto de Electron
 // (File/Edit/View/...), que no tiene sentido para un POS de pantalla
@@ -16,12 +48,25 @@ if (!isDev) {
 }
 
 async function createWindow(): Promise<void> {
+  const titulo = negocioConfig.nombre || "POS Indumentaria";
+
   const win = new BrowserWindow({
     width: 1280,
     height: 800,
+    minWidth: 1280,
+    minHeight: 720,
+    title: titulo,
+    ...(negocioLogoPath ? { icon: negocioLogoPath } : {}),
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
     },
+  });
+
+  // El frontend no define un <title> por negocio (es un template genérico de
+  // Vite), pero por las dudas: si alguna vez lo hace, no debe pisar el
+  // nombre del negocio en la barra de título/taskbar.
+  win.on("page-title-updated", (event) => {
+    event.preventDefault();
   });
 
   // Pantalla de carga estática mientras el backend levanta y migra, para no
@@ -42,6 +87,12 @@ async function createWindow(): Promise<void> {
       query: { apiPort: String(port) },
     });
   }
+
+  // El <title>frontend</title> del build de Vite pisa el título de la
+  // ventana apenas termina de cargar (el listener de "page-title-updated"
+  // de arriba no alcanza a frenarlo en todos los casos), así que se
+  // reafirma acá explícitamente.
+  win.setTitle(titulo);
 }
 
 // Un POS solo debe tener una instancia escribiendo la SQLite del usuario a

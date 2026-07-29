@@ -76,6 +76,9 @@ export interface Negocio {
   nombre: string;
   direccion: string;
   cuit: string;
+  // Relativa a la baseURL de la API (ver shared/api/client.ts), no una URL
+  // absoluta: armarla con `${api.defaults.baseURL}${logoUrl}`.
+  logoUrl: string | null;
 }
 
 export function useCrearVenta() {

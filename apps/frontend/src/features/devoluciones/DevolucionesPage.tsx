@@ -233,7 +233,7 @@ export function DevolucionesPage() {
       });
       toast.success(`Venta ${ventaNueva.numero} generada con el canje`);
       try {
-        imprimirTicket(ventaNueva, negocio ?? { nombre: "Comprobante de venta", direccion: "", cuit: "" });
+        imprimirTicket(ventaNueva, negocio ?? { nombre: "Comprobante de venta", direccion: "", cuit: "", logoUrl: null });
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "No se pudo imprimir el ticket");
       }

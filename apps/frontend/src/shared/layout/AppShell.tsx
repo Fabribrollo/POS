@@ -3,6 +3,7 @@ import { LogOut, LayoutGrid, Package, RotateCcw, ShoppingCart, Users, Wallet } f
 import { NavLink, Outlet } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { useNegocio } from "@/features/ventas/ventas.api";
+import { api } from "@/shared/api/client";
 import { useAuthStore } from "@/shared/stores/auth.store";
 
 
@@ -25,11 +26,20 @@ export function AppShell() {
   return (
     <div className="flex h-svh">
       <aside className="flex h-full w-56 shrink-0 flex-col overflow-y-auto border-r bg-sidebar p-4">
-        <div className="mb-6 px-2">
-          <p className="text-sm font-semibold text-sidebar-foreground">{negocio?.nombre ?? "POS"}</p>
-          <p className="text-xs text-muted-foreground">
-            {usuario.nombre} · {usuario.rol}
-          </p>
+        <div className="mb-6 flex items-center gap-2 px-2">
+          {negocio?.logoUrl && (
+            <img
+              src={`${api.defaults.baseURL}${negocio.logoUrl}`}
+              alt=""
+              className="size-8 shrink-0 rounded object-contain"
+            />
+          )}
+          <div>
+            <p className="text-sm font-semibold text-sidebar-foreground">{negocio?.nombre ?? "POS"}</p>
+            <p className="text-xs text-muted-foreground">
+              {usuario.nombre} · {usuario.rol}
+            </p>
+          </div>
         </div>
         <nav className="flex flex-1 flex-col gap-1">
           {links
