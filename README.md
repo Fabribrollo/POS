@@ -5,7 +5,7 @@ Sistema de punto de venta para comercios de indumentaria. Monorepo pnpm con back
 ## Cómo correr el proyecto
 
 **Importante:**
-Credenciales administrador
+
 Email: admin@pos.local
 Contraseña: admin123
 
