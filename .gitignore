@@ -3,6 +3,8 @@ dist/
 build/
 release/
 *.log
+.claude/
+.claude
 
 # Prisma / SQLite local
 prisma/dev.db
