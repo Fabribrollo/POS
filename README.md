@@ -28,7 +28,17 @@ Sistema de punto de venta para comercios de indumentaria. Monorepo pnpm con back
 
    Esto crea `prisma/dev.db`, aplica las migraciones y siembra el usuario `admin@pos.local` / `admin123`.
 
-5. **Generar el instalador de Windows:**
+5. Correr en modo desarrollo (sin empaquetar)
+
+```bash
+pnpm dev:electron
+```
+
+
+
+Opcional: 
+
+EMPAQUETAR: **Generar el instalador de Windows:**
 
    ```bash
    pnpm package:win
@@ -36,12 +46,3 @@ Sistema de punto de venta para comercios de indumentaria. Monorepo pnpm con back
 
    El instalador queda en `apps/electron/release/POS Indumentaria Setup X.X.X.exe`.
 
-### Alternativa: correr en modo desarrollo (sin empaquetar)
-
-```bash
-pnpm dev:electron
-```
-
-### Nota (Windows)
-
-Si `electron-builder` falla al descargar `winCodeSign` con un error de symlinks ("A required privilege is not held by the client"), es porque falta el Modo de Desarrollador de Windows. Se soluciona activándolo en Configuración → Privacidad y seguridad → Para desarrolladores, o corriendo la terminal como Administrador.
